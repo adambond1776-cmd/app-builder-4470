@@ -23,9 +23,9 @@ export default function App() {
       data-testid="app-root"
     >
       {screen === "onboarding" && <HiddenGeniusOnboarding onContinue={() => setScreen("welcome")} />}
-      {screen === "welcome" && <WelcomeScreen onStart={() => setScreen("track")} />}
-      {screen === "track" && <TrackScreen onSelectTrack={(t) => { setTrack(t); setScreen("chat"); }} />}
-      {screen === "chat" && <ChatScreen track={track} onChangeTrack={() => setScreen("track")} />}
+      {screen === "welcome" && <WelcomeScreen onStart={() => setScreen("track")} onBack={() => setScreen("onboarding")} />}
+      {screen === "track" && <TrackScreen onSelectTrack={(t) => { setTrack(t); setScreen("chat"); }} onBack={() => setScreen("welcome")} />}
+      {screen === "chat" && <ChatScreen track={track} onChangeTrack={() => setScreen("track")} onBack={() => setScreen("track")} />}
     </div>
   );
 }

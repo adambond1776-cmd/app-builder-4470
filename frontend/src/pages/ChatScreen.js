@@ -40,7 +40,7 @@ function FeedbackButtons({ messageIndex, track, messageContent }) {
   );
 }
 
-export default function ChatScreen({ track, onChangeTrack }) {
+export default function ChatScreen({ track, onChangeTrack, onBack }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: OPENING }]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -81,6 +81,11 @@ export default function ChatScreen({ track, onChangeTrack }) {
   return (
     <div className="flex flex-col h-full" data-testid="chat-screen">
       <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: "hsl(220,30%,18%)", background: "hsl(220,35%,9%)" }}>
+        {onBack && (
+          <button onClick={onBack} data-testid="chat-back-btn" className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "hsl(220,30%,16%)", border: "1px solid hsl(220,30%,22%)", color: "hsl(210,20%,85%)" }}>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </button>
+        )}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black" style={{ background: "linear-gradient(135deg, hsl(213,100%,55%) 0%, hsl(213,100%,45%) 100%)", color: "white" }}>M</div>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm" style={{ color: "hsl(210,20%,95%)" }}>Max</div>

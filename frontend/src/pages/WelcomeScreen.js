@@ -2,11 +2,16 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import FourBurnersSheet from "../components/FourBurnersSheet";
 
-export default function WelcomeScreen({ onStart }) {
+export default function WelcomeScreen({ onStart, onBack }) {
   const [showBurners, setShowBurners] = useState(false);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full px-6 text-center relative overflow-hidden" data-testid="welcome-screen">
+      {onBack && (
+        <button onClick={onBack} data-testid="welcome-back-btn" className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "hsl(220,30%,14%)", border: "1px solid hsl(220,30%,22%)", color: "hsl(210,20%,85%)" }}>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+      )}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full opacity-10 blur-3xl" style={{ background: "radial-gradient(circle, hsl(213,100%,60%), transparent)" }} />
       <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full opacity-10 blur-3xl" style={{ background: "radial-gradient(circle, hsl(25,100%,55%), transparent)" }} />
 

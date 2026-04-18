@@ -7,9 +7,14 @@ const TRACKS = [
   { id: "Figuring It Out Track", emoji: "🔍", title: "Figuring It Out Track", description: "No clear path yet — and that's completely okay" },
 ];
 
-export default function TrackScreen({ onSelectTrack }) {
+export default function TrackScreen({ onSelectTrack, onBack }) {
   return (
-    <div className="flex flex-col min-h-full px-5 py-8 overflow-y-auto" data-testid="track-screen">
+    <div className="flex flex-col min-h-full px-5 py-8 overflow-y-auto relative" data-testid="track-screen">
+      {onBack && (
+        <button onClick={onBack} data-testid="track-back-btn" className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "hsl(220,30%,14%)", border: "1px solid hsl(220,30%,22%)", color: "hsl(210,20%,85%)" }}>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+      )}
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-8">
         <h2 className="text-3xl font-black tracking-tight" style={{ color: "hsl(210,20%,95%)" }}>Find Your Road</h2>
         <p className="mt-2 text-sm" style={{ color: "hsl(220,15%,55%)" }}>Where are you headed right now? Pick the track that fits.</p>
