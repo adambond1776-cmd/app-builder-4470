@@ -1,54 +1,31 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { useState } from "react";
+import HiddenGeniusOnboarding from "./pages/HiddenGeniusOnboarding";
+import WelcomeScreen from "./pages/WelcomeScreen";
+import TrackScreen from "./pages/TrackScreen";
+import ChatScreen from "./pages/ChatScreen";
+import "./App.css";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function getInitialScreen() {
+  try {
+    if (localStorage.getItem("hg_onboarded") === "true") return "welcome";
+  } catch {}
+  return "onboarding";
+}
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+export default function App() {
+  const [screen, setScreen] = useState(getInitialScreen);
+  const [track, setTrack] = useState("");
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+    <div
+      className="flex flex-col h-screen w-full max-w-md mx-auto overflow-hidden"
+      style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
+      data-testid="app-root"
+    >
+      {screen === "onboarding" && <HiddenGeniusOnboarding onContinue={() => setScreen("welcome")} />}
+      {screen === "welcome" && <WelcomeScreen onStart={() => setScreen("track")} />}
+      {screen === "track" && <TrackScreen onSelectTrack={(t) => { setTrack(t); setScreen("chat"); }} />}
+      {screen === "chat" && <ChatScreen track={track} onChangeTrack={() => setScreen("track")} />}
     </div>
   );
 }
-
-export default App;
