@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 
 const TRACKS = [
-  { id: "College Track", emoji: "🎓", title: "College Track", description: "Navigating admissions, academics, and what comes next" },
+  { id: "School Track", emoji: "🎓", title: "School Track", description: "High school, college, grad school — navigating academics and what's next" },
   { id: "Work Track", emoji: "💼", title: "Work Track", description: "Building a career, making money, getting real experience" },
   { id: "Trade Track", emoji: "🔧", title: "Trade Track", description: "Skilled trades, apprenticeships, and building real wealth" },
   { id: "Figuring It Out Track", emoji: "🔍", title: "Figuring It Out Track", description: "No clear path yet — and that's completely okay" },

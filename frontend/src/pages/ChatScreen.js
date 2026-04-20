@@ -4,9 +4,9 @@ import FourBurnersSheet from "../components/FourBurnersSheet";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const TRACK_EMOJI = { "College Track": "🎓", "Work Track": "💼", "Trade Track": "🔧", "Figuring It Out Track": "🔍" };
+const TRACK_EMOJI = { "School Track": "🎓", "Work Track": "💼", "Trade Track": "🔧", "Figuring It Out Track": "🔍" };
 const TRACK_OPENERS = {
-  "College Track": `College isn't just about getting in — it's about what you build while you're there. What's the real thing on your mind right now: admissions grind, a class that's crushing you, a major you're second-guessing, or something outside the academic side? Where do we start?`,
+  "School Track": `School is the arena right now — whether that's high school, college, or somewhere in between. What's the real thing on your mind: a class that's crushing you, admissions or transfer stress, a major/path you're second-guessing, or something outside the academic side entirely? Where do we start?`,
   "Work Track": `You're out here already building — that puts you ahead of most people your age, even if it doesn't feel like it. Tell me the real picture: the job, the pay, the boss, the hustle on the side, or the next move you're trying to make? What's eating at you?`,
   "Trade Track": `Trades are where real money and real freedom live — and nobody talks about it enough. Where are you in it: still picking a trade, mid-apprenticeship, lining up your first paycheck, or thinking bigger like running your own crew? What do you need to figure out?`,
   "Figuring It Out Track": `Nobody has it figured out at your age — the ones who pretend they do are lying. Forget the 10-year plan for a second: what actually pulls you in, what drains you, and what's keeping you up at night right now? Tell me what's real.`,

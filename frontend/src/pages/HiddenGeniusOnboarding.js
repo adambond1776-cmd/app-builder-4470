@@ -30,7 +30,7 @@ export default function HiddenGeniusOnboarding({ onContinue }) {
             <span style={{ background: "linear-gradient(135deg, hsl(25,100%,60%), hsl(25,100%,45%))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>You're the story.</span>
           </h1>
           <p className="text-base leading-relaxed mb-6" style={{ color: "hsl(220,15%,60%)" }}>
-            You're one of fewer than 20 people chosen to help shape Max — an AI life coach built for teenagers who refuse to settle for less than all four burners running at full capacity.
+            You're one of fewer than 20 people chosen to help shape Max — an AI life coach built for young people (16–23) who refuse to settle for less than all four burners running at full capacity.
           </p>
 
           <div className="space-y-4 mb-8">
