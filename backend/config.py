@@ -28,6 +28,13 @@ UPVOTE_RATE_LIMIT_PER_IP_PER_DAY = 30  # anti-spam; anonymous votes capped per I
 PARENT_CHAT_MODEL = "claude-sonnet-4-6"
 PARENT_SUMMARY_MODEL = "claude-haiku-4-5-20251001"
 PARENT_MAX_REPLY_TOKENS = 450  # slightly higher than Max — parents get a little more
+PARENT_SUMMARY_MAX_TOKENS = 300
+PARENT_SUMMARY_EVERY_N_EXCHANGES = 6
+PARENT_RAW_HISTORY_KEEP = 6
+PARENT_DAILY_MESSAGE_CAP = 30  # Free-tier daily cap for Maya (mirrors Max for now)
+# Progressive nudge thresholds (remaining messages)
+PARENT_NUDGE_APPROACHING = 10  # first soft banner
+PARENT_NUDGE_FINAL = 5         # in-response upgrade nudge in Maya's tone
 FAMILY_PLAN_LAUNCH_PRICE = 29  # dollars/month at full launch
 FOUNDING_PARENT_PRICE = 14.50  # 50% off, locked for 1 year
 FOUNDING_PARENT_CAP = 100  # first 100 parents get the founding rate

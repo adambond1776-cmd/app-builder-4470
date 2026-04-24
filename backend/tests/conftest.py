@@ -30,7 +30,7 @@ def mongo():
     c.close()
 
 
-def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, daily_count_date=None, memory_card=None, exchange_count=0, founding_20_applied=False):
+def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, daily_count_date=None, memory_card=None, exchange_count=0, founding_20_applied=False, role="kid", parent_daily_count=0, parent_daily_count_date=None, parent_memory_card=None, parent_exchange_count=0):
     suffix = f"{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
     user_id = f"TEST_user_{suffix}"
     token = f"TEST_sess_{suffix}"
@@ -39,14 +39,19 @@ def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, d
         "email": f"TEST_{suffix}@example.com",
         "name": "Test Founder",
         "picture": None,
+        "role": role,
         "age_confirmed": age_confirmed,
         "beta_consent": beta_consent,
         "documentary_interest": "maybe",
-        "current_track": "School Track",
+        "current_track": "School Track" if role == "kid" else None,
         "memory_card": memory_card,
         "exchange_count_since_summary": exchange_count,
         "daily_count": daily_count,
         "daily_count_date": daily_count_date,
+        "parent_memory_card": parent_memory_card,
+        "parent_exchange_count_since_summary": parent_exchange_count,
+        "parent_daily_count": parent_daily_count,
+        "parent_daily_count_date": parent_daily_count_date,
         "founding_20_applied": founding_20_applied,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -74,6 +79,7 @@ def seed_user(mongo):
         mongo.users.delete_many({"user_id": uid})
         mongo.user_sessions.delete_many({"user_id": uid})
         mongo.chat_logs.delete_many({"user_id": uid})
+        mongo.parent_chat_logs.delete_many({"user_id": uid})
         mongo.founding_20_applications.delete_many({"user_id": uid})
         mongo.feedback.delete_many({"user_id": uid})
 

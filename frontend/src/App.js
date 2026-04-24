@@ -14,6 +14,7 @@ import PitchPublicPage from "./pages/PitchPublicPage";
 import JudgeView from "./pages/JudgeView";
 import RoleSelect from "./pages/RoleSelect";
 import ParentDashboard from "./pages/ParentDashboard";
+import ParentChatScreen from "./pages/ParentChatScreen";
 import ParentInvite from "./pages/ParentInvite";
 import ParentPolls from "./pages/ParentPolls";
 import ParentIdeas from "./pages/ParentIdeas";
@@ -106,7 +107,8 @@ export default function App() {
   } else {
     if (screen === "signup_gate") body = <SignupGate user={user} onComplete={async () => { await refreshUser(); setScreen(user.role === "parent" ? "parent_home" : "role_select"); }} onBlocked={handleLogout} />;
     else if (screen === "role_select" || (user.role == null && screen === "home")) body = <RoleSelect user={user} onSelected={async (r) => { await refreshUser(); setScreen(r === "parent" ? "parent_home" : "home"); }} />;
-    else if (user.role === "parent" && ["parent_home", "home"].includes(screen)) body = <ParentDashboard user={user} onLogout={handleLogout} onOpenPolls={() => setScreen("parent_polls")} onOpenIdeas={() => setScreen("parent_ideas")} onOpenFounding={() => setScreen("parent_founding")} onOpenInvite={() => setScreen("parent_invite")} />;
+    else if (user.role === "parent" && ["parent_home", "home"].includes(screen)) body = <ParentDashboard user={user} onLogout={handleLogout} onOpenPolls={() => setScreen("parent_polls")} onOpenIdeas={() => setScreen("parent_ideas")} onOpenFounding={() => setScreen("parent_founding")} onOpenInvite={() => setScreen("parent_invite")} onOpenMaya={() => setScreen("parent_chat")} />;
+    else if (screen === "parent_chat") body = <ParentChatScreen onBack={() => setScreen("parent_home")} onOpenFounding={() => setScreen("parent_founding")} />;
     else if (screen === "parent_invite") body = <ParentInvite onBack={() => setScreen("parent_home")} />;
     else if (screen === "parent_polls") body = <ParentPolls onBack={() => setScreen("parent_home")} />;
     else if (screen === "parent_ideas") body = <ParentIdeas onBack={() => setScreen("parent_home")} />;

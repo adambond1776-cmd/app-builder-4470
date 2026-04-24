@@ -24,6 +24,9 @@ from config import (
     FAMILY_PLAN_LAUNCH_PRICE, FOUNDING_PARENT_PRICE, FOUNDING_PARENT_CAP,
     INVITE_CODE_EXPIRY_HOURS, FEATURE_POLL_OPTIONS,
     PARENT_CHAT_MODEL, PARENT_SUMMARY_MODEL, PARENT_MAX_REPLY_TOKENS,
+    PARENT_SUMMARY_MAX_TOKENS, PARENT_SUMMARY_EVERY_N_EXCHANGES,
+    PARENT_RAW_HISTORY_KEEP, PARENT_DAILY_MESSAGE_CAP,
+    PARENT_NUDGE_APPROACHING, PARENT_NUDGE_FINAL,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -95,6 +98,11 @@ class User(BaseModel):
     exchange_count_since_summary: int = 0
     daily_count: int = 0
     daily_count_date: Optional[str] = None
+    # Parent (Maya) — fully independent counters so a "both"-role user doesn't collide
+    parent_memory_card: Optional[str] = None
+    parent_exchange_count_since_summary: int = 0
+    parent_daily_count: int = 0
+    parent_daily_count_date: Optional[str] = None
     founding_20_applied: bool = False
     created_at: datetime
 
@@ -856,6 +864,51 @@ EMOTIONAL INTELLIGENCE:
 YOUR PURPOSE: Help parents stop running on fumes. Help them see their family as a system they're orchestrating, not a list of fires to put out. Help them raise kids while still becoming the person they want to be themselves."""
 
 
+class ParentChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
+class ParentChatResponse(BaseModel):
+    message: str
+    remaining_today: int
+    parent_memory_card: Optional[str] = None
+    limit_state: Literal["normal", "approaching", "final_five", "exhausted"] = "normal"
+    nudge: Optional[str] = None
+
+
+class ParentMemoryUpdate(BaseModel):
+    parent_memory_card: str
+
+
+async def build_parent_memory_card(user_id: str, existing: Optional[str], recent_turns: List[dict]) -> str:
+    """Use Haiku to distill Maya chat turns into a ~200 token Parent Memory Card."""
+    convo_text = "\n".join([f"{t['role']}: {t['content']}" for t in recent_turns])
+    summary_prompt = (
+        "You are Maya's memory engine. Distill what you now know about this parent into a compact, structured note "
+        "Maya can reload in future chats. Keep it under 5 short lines. Focus on: family shape (kids' ages/vibes, co-parenting setup), "
+        "the parent's recurring pressures, commitments they made, family-burner status (structure/connection/resources/individual growth), "
+        "and emotional signals worth remembering. Write in plain-English third person, no fluff."
+    )
+    if existing:
+        summary_prompt += f"\n\nPrior memory:\n{existing}\n\nUpdate it with new info from these turns:"
+    else:
+        summary_prompt += "\n\nBuild a fresh memory note from these turns:"
+    summary_prompt += f"\n\n{convo_text}"
+
+    summarizer = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"parent-summary-{user_id}-{uuid.uuid4().hex[:6]}",
+        system_message="You write compact memory notes about a parent. Max 5 short lines. No preamble.",
+    ).with_model("anthropic", PARENT_SUMMARY_MODEL).with_params(max_tokens=PARENT_SUMMARY_MAX_TOKENS)
+
+    try:
+        new_card = await summarizer.send_message(UserMessage(text=summary_prompt))
+        return new_card.strip()[:2000]
+    except Exception as e:
+        logger.warning(f"Parent memory summarization failed: {e}")
+        return existing or ""
+
+
 PARENT_TRACK_NAMES = {"single": "Single Parent", "co": "Co-Parent", "blended": "Blended Family", "guardian": "Guardian/Other"}
 
 
@@ -901,6 +954,169 @@ def _require_parent(user: User):
 def _require_onboarded(user: User):
     if not user.age_confirmed or not user.beta_consent:
         raise HTTPException(status_code=403, detail="Complete onboarding first")
+
+
+# -----------------------------
+# Maya — Parent Coach chat
+# -----------------------------
+@api_router.post("/family/chat", response_model=ParentChatResponse)
+async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_user)):
+    _require_parent(user)
+    _require_onboarded(user)
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="messages required")
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM not configured")
+
+    today = date.today().isoformat()
+    daily_count = user.parent_daily_count if user.parent_daily_count_date == today else 0
+    if daily_count >= PARENT_DAILY_MESSAGE_CAP:
+        raise HTTPException(status_code=429, detail="daily_cap_reached")
+
+    remaining_before = PARENT_DAILY_MESSAGE_CAP - daily_count
+    # Maya gets a soft in-response nudge in her own voice when the parent is down to final five.
+    # We append it as an instruction to the system prompt so it shows up in *her* tone, not a banner-bot tone.
+    nudge_instruction = ""
+    if remaining_before <= PARENT_NUDGE_FINAL:
+        nudge_instruction = (
+            f"\n\nSYSTEM NOTE (not visible to user): This parent has {remaining_before} message(s) left today on the free plan. "
+            "After your normal coaching answer, add ONE short, matter-of-fact line — in your own voice — letting them know they're near today's limit "
+            f"and that Founding Parents get unlimited sessions at ${FOUNDING_PARENT_PRICE}/mo (locked for a year, launches at ${FAMILY_PLAN_LAUNCH_PRICE}/mo). "
+            "Do NOT be salesy. One line. Optional if it breaks the emotional moment — skip it entirely if the parent just disclosed a crisis."
+        )
+
+    memory_context = (
+        f"\n\nMAYA'S MEMORY OF THIS PARENT:\n{user.parent_memory_card}\n\nUse this context naturally; don't robotically repeat it."
+        if user.parent_memory_card else ""
+    )
+    full_system = MAYA_SYSTEM_PROMPT + memory_context + nudge_instruction
+
+    last = req.messages[-1]
+    if last.role != "user":
+        raise HTTPException(status_code=400, detail="last message must be user")
+
+    prior = req.messages[:-1][-(PARENT_RAW_HISTORY_KEEP * 2):]
+    transcript = ""
+    if prior:
+        lines = [f"{'Parent' if m.role == 'user' else 'Maya'}: {m.content}" for m in prior]
+        transcript = "\n\nRECENT CONVERSATION:\n" + "\n".join(lines) + "\n\nContinue naturally."
+
+    chat_client = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"parent-chat-{user.user_id}-{uuid.uuid4().hex[:6]}",
+        system_message=full_system + transcript,
+    ).with_model("anthropic", PARENT_CHAT_MODEL).with_params(max_tokens=PARENT_MAX_REPLY_TOKENS)
+
+    try:
+        reply = await chat_client.send_message(UserMessage(text=last.content))
+    except Exception as e:
+        logger.exception("Parent chat LLM error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Persist this turn (separate collection so kids' chat_logs stay clean)
+    await db.parent_chat_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "user": last.content,
+        "assistant": reply,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+    new_exchange = user.parent_exchange_count_since_summary + 1
+    new_daily = daily_count + 1
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {
+            "parent_daily_count": new_daily,
+            "parent_daily_count_date": today,
+            "parent_exchange_count_since_summary": new_exchange,
+        }},
+    )
+
+    updated_memory = user.parent_memory_card
+    if new_exchange >= PARENT_SUMMARY_EVERY_N_EXCHANGES:
+        recent_docs = await db.parent_chat_logs.find(
+            {"user_id": user.user_id}, {"_id": 0, "user": 1, "assistant": 1}
+        ).sort("timestamp", -1).limit(PARENT_SUMMARY_EVERY_N_EXCHANGES).to_list(PARENT_SUMMARY_EVERY_N_EXCHANGES)
+        recent_turns = []
+        for d in reversed(recent_docs):
+            recent_turns.append({"role": "user", "content": d["user"]})
+            recent_turns.append({"role": "assistant", "content": d["assistant"]})
+        updated_memory = await build_parent_memory_card(user.user_id, user.parent_memory_card, recent_turns)
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"parent_memory_card": updated_memory, "parent_exchange_count_since_summary": 0}},
+        )
+
+    remaining_after = max(0, PARENT_DAILY_MESSAGE_CAP - new_daily)
+    if remaining_after == 0:
+        limit_state = "exhausted"
+    elif remaining_after <= PARENT_NUDGE_FINAL:
+        limit_state = "final_five"
+    elif remaining_after <= PARENT_NUDGE_APPROACHING:
+        limit_state = "approaching"
+    else:
+        limit_state = "normal"
+
+    nudge_banner = None
+    if limit_state == "approaching":
+        nudge_banner = f"{remaining_after} messages left today."
+    elif limit_state == "final_five":
+        nudge_banner = f"{remaining_after} left. Founding Parents get unlimited — ${FOUNDING_PARENT_PRICE}/mo locked for a year."
+
+    return ParentChatResponse(
+        message=reply,
+        remaining_today=remaining_after,
+        parent_memory_card=updated_memory,
+        limit_state=limit_state,
+        nudge=nudge_banner,
+    )
+
+
+@api_router.get("/family/chat/history")
+async def family_chat_history(user: User = Depends(get_current_user), limit: int = 40):
+    _require_parent(user)
+    limit = max(1, min(200, limit))
+    docs = await db.parent_chat_logs.find(
+        {"user_id": user.user_id}, {"_id": 0, "user": 1, "assistant": 1, "timestamp": 1}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    turns = []
+    for d in reversed(docs):
+        turns.append({"role": "user", "content": d["user"], "timestamp": d.get("timestamp")})
+        turns.append({"role": "assistant", "content": d["assistant"], "timestamp": d.get("timestamp")})
+    today = date.today().isoformat()
+    daily_count = user.parent_daily_count if user.parent_daily_count_date == today else 0
+    return {
+        "messages": turns,
+        "remaining_today": max(0, PARENT_DAILY_MESSAGE_CAP - daily_count),
+        "daily_cap": PARENT_DAILY_MESSAGE_CAP,
+    }
+
+
+@api_router.get("/family/memory")
+async def family_get_memory(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    return {"parent_memory_card": user.parent_memory_card or ""}
+
+
+@api_router.put("/family/memory")
+async def family_update_memory(upd: ParentMemoryUpdate, user: User = Depends(get_current_user)):
+    _require_parent(user)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"parent_memory_card": upd.parent_memory_card[:2000], "parent_exchange_count_since_summary": 0}},
+    )
+    return {"ok": True, "parent_memory_card": upd.parent_memory_card[:2000]}
+
+
+@api_router.delete("/family/memory")
+async def family_reset_memory(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"parent_memory_card": None, "parent_exchange_count_since_summary": 0}},
+    )
+    return {"ok": True}
 
 
 @api_router.post("/family/invite")

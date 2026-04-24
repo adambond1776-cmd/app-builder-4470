@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
 
-export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite }) {
+export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite, onOpenMaya }) {
   const [dashboard, setDashboard] = useState(null);
   const [founding, setFounding] = useState(null);
 
@@ -25,6 +25,43 @@ export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIde
         </div>
         <button onClick={onLogout} data-testid="parent-logout-btn" className="text-xs px-3 py-1.5 rounded-lg" style={{ color: "hsl(220,15%,55%)", background: "hsl(220,30%,14%)", border: "1px solid hsl(220,30%,22%)" }}>Sign out</button>
       </div>
+
+      {/* Maya — Parent Coach hero CTA */}
+      <motion.button
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={onOpenMaya}
+        data-testid="parent-maya-cta"
+        className="text-left mb-5 p-5 rounded-2xl relative overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, hsla(280,75%,55%,0.18), hsla(213,100%,60%,0.06))",
+          border: "1px solid hsla(280,75%,60%,0.35)",
+        }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center text-base font-black"
+            style={{ background: "linear-gradient(135deg, hsl(280,75%,60%) 0%, hsl(280,75%,48%) 100%)", color: "white" }}
+          >
+            M
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "hsl(280,75%,72%)" }}>
+              Talk to Maya
+            </div>
+            <div className="font-black text-lg" style={{ color: "hsl(210,20%,95%)" }}>
+              Your parent coach →
+            </div>
+          </div>
+        </div>
+        <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,65%)" }}>
+          Warm, direct, no fluff. Maya coaches you through the Four Family Burners — Structure, Connection, Resources,
+          and your own Individual Growth. She remembers what you shared last time.
+        </div>
+        <div className="text-[10px] mt-3" style={{ color: "hsl(220,15%,50%)" }}>
+          30 free messages/day · Founding Parents unlock unlimited
+        </div>
+      </motion.button>
 
       {/* Invite card or kid cards */}
       {!dashboard?.kids?.length ? (

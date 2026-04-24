@@ -1,0 +1,32 @@
+{
+  "summary": "Phase 1B / Maya (Family OS Parent Coach) end-to-end validation PASSED. 18/18 new Maya backend tests + 17/17 Phase 1A regression tests = 35/35 green. Frontend flow validated via Playwright: parent-maya-cta → parent-chat-screen with Maya opener + 30/30 chip, message send flows through real Claude Sonnet 4.6, chip decrements to 29/30, maya-back-btn returns to dashboard. Exhausted state (parent_daily_count=30) correctly gates UI behind maya-upgrade-wall with $14.50/mo Founding Parent CTA. Parent test account counters fully reset after tests per main agent's request.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_maya_parent_chat.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/maya_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1389 lines (up from 487). Family OS + Maya + invites + polls + founding all co-located with auth/chat/profile. This is the single biggest maintainability risk right now — split into routers/ (family_router.py, chat_router.py, auth_router.py) + services/ (parent_memory.py, kid_memory.py) + prompts/. Phase 2 work will be painful otherwise.",
+    "Maya final_five nudge is injected as a SYSTEM NOTE into the system prompt every turn once remaining<=5. That relies on Claude actually following the instruction to append 'one short line.' In practice it will sometimes skip it (good: matches spec) and sometimes add it in odd places. A deterministic nudge_banner is already returned separately in the response payload — fine. But consider adding a golden-reply test that at least verifies *something* about the expected Founding Parent price appears, or accept the non-determinism and document it.",
+    "GET /api/family/chat/history returns the key as 'messages' (not 'turns' as the review request wording suggested). Frontend ParentChatScreen.js reads h.messages, so it's consistent — but the review's 'turns array' wording should be aligned in any PRD/docs.",
+    "Maya memory-card summarization runs synchronously in the request path — on the 6th exchange the user's response is delayed by the Haiku call (~1–2s extra). Acceptable today; if latency becomes an issue, push to a fastapi BackgroundTask.",
+    "Kid auto-summary (build_memory_card) still never wires SUMMARY_MAX_TOKENS through .with_params(max_tokens=...) — flagged in iteration_1; Maya's build_parent_memory_card DOES wire PARENT_SUMMARY_MAX_TOKENS correctly. Small inconsistency worth aligning.",
+    "Once parent_daily_count >= 30, ParentChatScreen still calls GET /api/family/chat/history on mount (succeeds, 200) and the UI then swaps to the upgrade wall. Good. But if the parent was mid-sentence and hit 30, the input disappears without saving draft. Minor UX nit.",
+    "No rate limit on /api/family/invite — a parent could spam hundreds of invite codes (each call deletes the prior pending one, so DB doesn't balloon, but it's still unbounded writes). Low severity.",
+    "CORS allow_origins='*' with allow_credentials=True still present from iteration_1 — still works via same-origin ingress, still fragile if domains split."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (extended _seed_user with role + parent counters)",
+    "/app/backend/tests/test_maya_parent_chat.py (new — 18 tests)"
+  ],
+  "success_rate": { "backend": "100% (35/35, 18 new Maya + 17 regression)", "frontend": "100% (all 5 flows)" },
+  "test_credentials": "Used pre-seeded PARENT_SESSION_TOKEN=test_parent_1777042439177 from /app/memory/test_credentials.md for frontend Playwright. Backend pytest seeds ephemeral TEST_user_* with role='parent' or role='kid'. All TEST_ data torn down per-test; real parent account reset at end (parent_daily_count=0, parent_daily_count_date=null, parent_memory_card=null, parent_chat_logs purged).",
+  "seed_data_creation": "Mongo-seeded 5 prior parent_chat_logs + parent_exchange_count_since_summary=5 for the memory-auto-summary test so only 1 real Claude call fires (vs 6). Limit-state tests pre-load parent_daily_count to 21/27/30 to hit target buckets with a single call.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Maya regression suite lives at /app/backend/tests/test_maya_parent_chat.py — run alongside test_max_coach_api.py. Both rely on the same conftest.py (now supports role= parameter). Parent test account: session_token=test_parent_1777042439177, user_id=user_dz3o51yo4yk. To test exhausted flow: mongosh --eval db.users.updateOne({user_id:'user_dz3o51yo4yk'},{\\$set:{parent_daily_count:30,parent_daily_count_date:<today-iso>}}). Reset when done. All data-testids in the problem statement exist (parent-maya-cta, parent-chat-screen, maya-input, maya-send-btn, maya-back-btn, maya-remaining-chip, maya-upgrade-wall, maya-upgrade-founding-btn, maya-upgrade-back-btn, maya-messages, maya-nudge-banner).",
+  "rca of the issue": "N/A — no issues. Maya backend contract, counters, memory-card auto-build, limit-state transitions, and UI wiring all behave exactly per spec. Kid /api/chat regression intact (kid counters and parent counters are fully isolated)."
+}
