@@ -313,7 +313,7 @@ async def build_memory_card(user_id: str, existing: Optional[str], recent_turns:
         api_key=EMERGENT_KEY,
         session_id=f"summary-{user_id}-{uuid.uuid4().hex[:6]}",
         system_message="You write compact memory notes. Max 5 short lines. No preamble.",
-    ).with_model("anthropic", SUMMARY_MODEL)
+    ).with_model("anthropic", SUMMARY_MODEL).with_params(max_tokens=SUMMARY_MAX_TOKENS)
 
     try:
         new_card = await summarizer.send_message(UserMessage(text=summary_prompt))
@@ -380,17 +380,16 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
-    # Bump counters
+    # Bump counters (only persist current_track when truthy, never overwrite with empty string)
     new_count = user.exchange_count_since_summary + 1
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$set": {
-            "daily_count": daily_count + 1,
-            "daily_count_date": today,
-            "exchange_count_since_summary": new_count,
-            "current_track": track or user.current_track,
-        }},
-    )
+    update_set = {
+        "daily_count": daily_count + 1,
+        "daily_count_date": today,
+        "exchange_count_since_summary": new_count,
+    }
+    if track:
+        update_set["current_track"] = track
+    await db.users.update_one({"user_id": user.user_id}, {"$set": update_set})
 
     # Refresh Memory Card if threshold hit (background-style but awaited for simplicity)
     updated_memory = user.memory_card
@@ -480,6 +479,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup():
+    # TTL index auto-expires old sessions so user_sessions doesn't grow forever
+    try:
+        await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    except Exception as e:
+        logger.warning(f"TTL index create failed: {e}")
 
 
 @app.on_event("shutdown")
