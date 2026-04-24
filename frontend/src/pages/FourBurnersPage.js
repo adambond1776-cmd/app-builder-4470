@@ -144,7 +144,7 @@ export default function FourBurnersPage({ onBack }) {
         </section>
 
         <p className="text-center text-xs pt-2 pb-4" style={{ color: "hsl(220,15%,35%)" }}>
-          Part of the <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">Hidden Genius</span> project
+          Part of the <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">Hidden Genius Labs LLC</span> project
         </p>
       </div>
     </div>

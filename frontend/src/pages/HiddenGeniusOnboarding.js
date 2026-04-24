@@ -8,7 +8,7 @@ export default function HiddenGeniusOnboarding({ onContinue }) {
 
   const items = [
     { icon: "⚡", title: "You're building this", body: "Your real conversations will directly shape how Max evolves. What works for you gets built in for everyone." },
-    { icon: "🎬", title: "This might be filmed", body: "Hidden Genius is a documentary project following real young people navigating real life. Your journey — if you choose — could be part of it." },
+    { icon: "🎬", title: "This might be filmed", body: "Hidden Genius Labs LLC is a documentary project following real young people navigating real life. Your journey — if you choose — could be part of it." },
     { icon: "🔒", title: "Your choice, your pace", body: "Nothing is required. You can use Max privately and never be on camera. Being in the beta is valuable on its own." },
   ];
 
@@ -46,7 +46,7 @@ export default function HiddenGeniusOnboarding({ onContinue }) {
           </div>
 
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }} className="text-xs leading-relaxed mb-8" style={{ color: "hsl(220,15%,42%)" }}>
-            Part of the <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">Hidden Genius</span> project by Adam Bond Devereau — finding the unrefined brilliance in every young person who's been underestimated.
+            Part of the <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">Hidden Genius Labs LLC</span> project by Adam Bond Devereau — finding the unrefined brilliance in every young person who's been underestimated.
           </motion.p>
         </motion.div>
 

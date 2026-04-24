@@ -95,7 +95,7 @@ export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenB
       </motion.button>
 
       <div className="text-center text-[10px] mt-8 mb-4" style={{ color: "hsl(220,15%,35%)" }}>
-        Phase 1A · Beta · Part of Hidden Genius
+        Phase 1A · Beta · Part of Hidden Genius Labs LLC
       </div>
     </div>
   );

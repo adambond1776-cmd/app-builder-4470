@@ -63,7 +63,7 @@ export default function FoundingApply({ onBack, onSubmitted }) {
           <ul className="text-sm space-y-1.5 leading-relaxed" style={{ color: "hsl(210,20%,85%)" }}>
             <li>· 1-on-1 with Adam Bond Devereau — 30 minutes every week</li>
             <li>· 90 days of direct coaching</li>
-            <li>· Featured consideration for the Hidden Genius documentary</li>
+            <li>· Featured consideration for the Hidden Genius Labs LLC documentary</li>
             <li>· 3 spots given free. Remaining spots paid (pricing shared if selected).</li>
           </ul>
           <div className="text-xs italic mt-3" style={{ color: "hsl(25,100%,65%)" }}>

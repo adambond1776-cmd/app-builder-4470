@@ -71,9 +71,9 @@ export default function SignupGate({ user, onComplete, onBlocked }) {
 
       {/* Documentary interest */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mb-6 p-4 rounded-2xl" style={{ background: "hsl(220,35%,11%)", border: "1px solid hsl(220,30%,19%)" }}>
-        <div className="font-bold text-sm mb-1" style={{ color: "hsl(210,20%,92%)" }}>3 · Hidden Genius documentary</div>
+        <div className="font-bold text-sm mb-1" style={{ color: "hsl(210,20%,92%)" }}>3 · Hidden Genius Labs LLC documentary</div>
         <div className="text-xs mb-3 leading-relaxed" style={{ color: "hsl(220,15%,60%)" }}>
-          Hidden Genius is a real documentary project following young people figuring life out. Want to be open to being considered?
+          Hidden Genius Labs LLC is a real documentary project following young people figuring life out. Want to be open to being considered?
         </div>
         <div className="flex flex-col gap-2">
           {[
