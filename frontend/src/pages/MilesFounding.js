@@ -1,16 +1,31 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
+import { startCheckout } from "../lib/stripe";
 
 export default function MilesFounding({ onBack }) {
   const [status, setStatus] = useState(null);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
+  const [mode, setMode] = useState("pay"); // "pay" (Stripe lock-in) or "waitlist" (no card)
 
   useEffect(() => {
     apiJSON("/miles/founding-status").then(setStatus).catch(() => {});
   }, []);
+
+  const lockWithStripe = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      await startCheckout("founding_miles_lock");
+      // browser redirects to Stripe; nothing to do
+    } catch (e) {
+      setErr(e.message || "Couldn't start checkout");
+      setSubmitting(false);
+    }
+  };
 
   const signup = async () => {
     setSubmitting(true);
@@ -161,19 +176,61 @@ export default function MilesFounding({ onBack }) {
               </div>
             )}
 
+            {/* Mode selector */}
+            <div
+              className="flex gap-1 p-1 rounded-xl"
+              style={{ background: "hsl(220,30%,12%)", border: "1px solid hsl(220,30%,19%)" }}
+            >
+              <button
+                onClick={() => setMode("pay")}
+                data-testid="miles-founding-mode-pay"
+                className="flex-1 py-2 rounded-lg text-xs font-bold"
+                style={{
+                  background: mode === "pay" ? "hsl(160,70%,45%)" : "transparent",
+                  color: mode === "pay" ? "white" : "hsl(220,15%,65%)",
+                }}
+              >
+                Pay & lock now
+              </button>
+              <button
+                onClick={() => setMode("waitlist")}
+                data-testid="miles-founding-mode-waitlist"
+                className="flex-1 py-2 rounded-lg text-xs font-bold"
+                style={{
+                  background: mode === "waitlist" ? "hsl(220,30%,18%)" : "transparent",
+                  color: mode === "waitlist" ? "hsl(210,20%,90%)" : "hsl(220,15%,55%)",
+                }}
+              >
+                Waitlist (no card)
+              </button>
+            </div>
+
             <button
-              onClick={signup}
+              onClick={mode === "pay" ? lockWithStripe : signup}
               disabled={!agree || submitting}
               data-testid="miles-founding-lock-btn"
               className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40"
               style={{
-                background: "linear-gradient(135deg, hsl(160,70%,45%), hsl(160,70%,35%))",
+                background:
+                  mode === "pay"
+                    ? "linear-gradient(135deg, hsl(160,70%,45%), hsl(160,70%,35%))"
+                    : "hsl(220,30%,18%)",
                 color: "white",
-                boxShadow: agree ? "0 0 24px hsla(160,70%,45%,0.3)" : "none",
+                boxShadow: agree && mode === "pay" ? "0 0 24px hsla(160,70%,45%,0.3)" : "none",
+                border: mode === "waitlist" ? "1px solid hsl(220,30%,28%)" : "none",
               }}
             >
-              {submitting ? "Locking…" : `Lock in $${status.founding_price}/mo`}
+              {submitting
+                ? "…"
+                : mode === "pay"
+                ? `Pay $${status.founding_price} & lock now →`
+                : `Add me to the waitlist`}
             </button>
+            {mode === "pay" && (
+              <div className="text-[10px] text-center mt-2" style={{ color: "hsl(220,15%,40%)" }}>
+                Secure checkout via Stripe · Founding rate locked for 1 year
+              </div>
+            )}
           </>
         )}
       </div>

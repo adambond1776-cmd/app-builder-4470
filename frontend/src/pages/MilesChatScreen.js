@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiJSON } from "../lib/api";
+import { startCheckout } from "../lib/stripe";
 
 const PERSONA_ACCENT = {
   ivy: { hue: 160, name: "Ivy", opener: "Hey — I'm Ivy. Whatever we're working on today, we go at your pace. Tell me what you're stuck on, and we'll find the one piece that's missing. What subject and which question?" },
@@ -15,6 +16,12 @@ const SUBJECT_LABELS = {
 };
 
 function UpgradeWall({ accent, brandShort, foundingPrice, onFounding, onBack }) {
+  const [boosting, setBoosting] = useState(false);
+  const buyBooster = async () => {
+    if (boosting) return;
+    setBoosting(true);
+    try { await startCheckout("booster_miles_30"); } catch { setBoosting(false); }
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -27,15 +34,26 @@ function UpgradeWall({ accent, brandShort, foundingPrice, onFounding, onBack }) 
         You've used today's 30 messages
       </div>
       <div className="text-sm mb-8 leading-relaxed" style={{ color: "hsl(220,15%,62%)" }}>
-        Resets at midnight. Or — if {brandShort} is already earning its keep — lock in the Founding {brandShort} rate
-        before we launch.
+        Resets at midnight. Pick up another 200 messages, or lock in Founding {brandShort} before we launch.
       </div>
+      <button
+        onClick={buyBooster}
+        disabled={boosting}
+        data-testid="miles-upgrade-booster-btn"
+        className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm mb-3 disabled:opacity-50"
+        style={{
+          background: `linear-gradient(135deg, hsl(${accent.hue},80%,55%), hsl(${accent.hue},80%,42%))`,
+          color: "white",
+        }}
+      >
+        {boosting ? "Opening Stripe…" : "+200 messages · $2.99 →"}
+      </button>
       <button
         onClick={onFounding}
         data-testid="miles-upgrade-founding-btn"
         className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm mb-3"
         style={{
-          background: `linear-gradient(135deg, hsl(${accent.hue},85%,55%), hsl(${accent.hue},85%,42%))`,
+          background: "linear-gradient(135deg, hsl(160,70%,45%), hsl(160,70%,35%))",
           color: "white",
         }}
       >

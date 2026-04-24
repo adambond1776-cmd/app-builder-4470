@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import FourBurnersSheet from "../components/FourBurnersSheet";
 import { apiJSON, API } from "../lib/api";
+import { startCheckout } from "../lib/stripe";
 
 const TRACK_EMOJI = { "School Track": "🎓", "Work Track": "💼", "Trade Track": "🔧", "Figuring It Out Track": "🔍" };
 const TRACK_OPENERS = {
@@ -71,7 +72,7 @@ export default function ChatScreen({ track, onChangeTrack, onBack, onOpenBurners
     } catch (err) {
       if (err.status === 429) {
         setCapHit(true);
-        setMessages(prev => [...prev, { role: "assistant", content: "You've hit today's 30-message limit — nice grind. Come back tomorrow, or Booster Packs drop in Phase 1C. Go live your life in the meantime." }]);
+        setMessages(prev => [...prev, { role: "assistant", content: "You've hit today's 30-message limit — nice grind. Tap the booster below for +200 more, or come back tomorrow." }]);
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: `Hmm, hit a snag: ${err.message}. Try again.` }]);
       }
@@ -134,6 +135,18 @@ export default function ChatScreen({ track, onChangeTrack, onBack, onOpenBurners
       </div>
 
       <div className="flex-shrink-0 px-4 py-4 border-t" style={{ borderColor: "hsl(220,30%,16%)", background: "hsl(220,35%,9%)" }}>
+        {capHit && (
+          <div className="mb-3 p-3 rounded-xl flex items-center gap-3" data-testid="chat-cap-booster-banner" style={{ background: "linear-gradient(135deg, hsla(213,100%,55%,0.14), hsla(270,80%,60%,0.06))", border: "1px solid hsla(213,100%,60%,0.35)" }}>
+            <div className="text-xl">⚡</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold" style={{ color: "hsl(210,20%,95%)" }}>Need more time with Max today?</div>
+              <div className="text-[11px]" style={{ color: "hsl(220,15%,65%)" }}>+200 messages · $2.99 · instant unlock</div>
+            </div>
+            <button onClick={() => startCheckout("booster_max_30").catch(() => {})} data-testid="chat-cap-booster-btn" className="text-xs px-3 py-2 rounded-lg font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(213,100%,45%))", color: "white" }}>
+              Boost →
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-3">
           <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey} placeholder="Message Max..." rows={1} data-testid="chat-input" className="flex-1 resize-none rounded-2xl px-4 py-3 text-sm outline-none" style={{ background: "hsl(220,30%,15%)", border: "1px solid hsl(220,30%,22%)", color: "hsl(210,20%,90%)", maxHeight: "120px", lineHeight: "1.5" }} />
           <button onClick={sendMessage} disabled={!input.trim() || isLoading} data-testid="chat-send-btn" className="w-11 h-11 rounded-2xl flex items-center justify-center disabled:opacity-40" style={{ background: input.trim() && !isLoading ? "linear-gradient(135deg, hsl(213,100%,58%) 0%, hsl(213,100%,48%) 100%)" : "hsl(220,30%,20%)" }}>

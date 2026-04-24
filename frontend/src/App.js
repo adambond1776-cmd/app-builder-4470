@@ -27,6 +27,7 @@ import MilesPolls from "./pages/MilesPolls";
 import MilesFounding from "./pages/MilesFounding";
 import PitchesHubPage from "./pages/PitchesHubPage";
 import SponsorPage from "./pages/SponsorPage";
+import PaymentReturn from "./pages/PaymentReturn";
 import { apiJSON } from "./lib/api";
 import "./App.css";
 
@@ -38,6 +39,7 @@ function parsePath() {
   if (pitchMatch) return { type: "pitch_public", slug: pitchMatch[1] };
   if (pathname === "/pitches") return { type: "pitches_hub" };
   if (pathname === "/sponsor") return { type: "sponsor" };
+  if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");
     if (token) return { type: "judge", token };
@@ -102,6 +104,13 @@ export default function App() {
     return (
       <div className="flex flex-col min-h-screen w-full max-w-2xl mx-auto" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
         <SponsorPage />
+      </div>
+    );
+  }
+  if (route.type === "payment_return") {
+    return (
+      <div className="flex flex-col min-h-screen w-full max-w-md mx-auto" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
+        <PaymentReturn />
       </div>
     );
   }

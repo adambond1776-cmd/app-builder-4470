@@ -116,6 +116,13 @@ class User(BaseModel):
     miles_daily_count_date: Optional[str] = None
     miles_documentary_interest: Optional[Literal["yes", "maybe", "no"]] = None
     miles_onboarded_at: Optional[str] = None
+    # Phase 1C — Stripe: booster packs (consumed after daily cap) + founding rate locks
+    stripe_customer_id: Optional[str] = None
+    max_boosters_remaining: int = 0
+    parent_boosters_remaining: int = 0
+    miles_boosters_remaining: int = 0
+    family_founding_locked_until: Optional[str] = None   # ISO date; set by founding_family_lock purchase
+    miles_founding_locked_until: Optional[str] = None    # ISO date; set by founding_miles_lock purchase
     founding_20_applied: bool = False
     created_at: datetime
 
@@ -365,11 +372,15 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
     if not EMERGENT_KEY:
         raise HTTPException(status_code=500, detail="LLM not configured")
 
-    # Daily cap check
+    # Daily cap check — boosters pay the overage
     today = date.today().isoformat()
     daily_count = user.daily_count if user.daily_count_date == today else 0
+    used_booster = False
     if daily_count >= DAILY_MESSAGE_CAP:
-        raise HTTPException(status_code=429, detail="daily_cap_reached")
+        if user.max_boosters_remaining > 0:
+            used_booster = True
+        else:
+            raise HTTPException(status_code=429, detail="daily_cap_reached")
 
     track = req.track or user.current_track or ""
     track_context = TRACK_COACHING.get(track, "")
@@ -417,6 +428,8 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
         "daily_count_date": today,
         "exchange_count_since_summary": new_count,
     }
+    if used_booster:
+        update_set["max_boosters_remaining"] = max(0, user.max_boosters_remaining - 1)
     if track:
         update_set["current_track"] = track
     await db.users.update_one({"user_id": user.user_id}, {"$set": update_set})
@@ -1008,8 +1021,12 @@ async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_u
 
     today = date.today().isoformat()
     daily_count = user.parent_daily_count if user.parent_daily_count_date == today else 0
+    used_booster = False
     if daily_count >= PARENT_DAILY_MESSAGE_CAP:
-        raise HTTPException(status_code=429, detail="daily_cap_reached")
+        if user.parent_boosters_remaining > 0:
+            used_booster = True
+        else:
+            raise HTTPException(status_code=429, detail="daily_cap_reached")
 
     remaining_before = PARENT_DAILY_MESSAGE_CAP - daily_count
     # Maya gets a soft in-response nudge in her own voice when the parent is down to final five.
@@ -1062,13 +1079,16 @@ async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_u
 
     new_exchange = user.parent_exchange_count_since_summary + 1
     new_daily = daily_count + 1
+    parent_update = {
+        "parent_daily_count": new_daily,
+        "parent_daily_count_date": today,
+        "parent_exchange_count_since_summary": new_exchange,
+    }
+    if used_booster:
+        parent_update["parent_boosters_remaining"] = max(0, user.parent_boosters_remaining - 1)
     await db.users.update_one(
         {"user_id": user.user_id},
-        {"$set": {
-            "parent_daily_count": new_daily,
-            "parent_daily_count_date": today,
-            "parent_exchange_count_since_summary": new_exchange,
-        }},
+        {"$set": parent_update},
     )
 
     updated_memory = user.parent_memory_card
@@ -1408,9 +1428,13 @@ class SponsorInquiry(BaseModel):
     company: str
     email: str
     role: Optional[str] = None
-    budget_tier: Optional[Literal["under_10k", "10k_50k", "50k_plus", "unsure"]] = None
+    budget_tier: Optional[Literal["under_10k", "10k_50k", "50k_plus", "lead_partner", "unsure"]] = None
     round_interest: Optional[str] = None
     message: str
+    # Lead Partner strategic fields (only present for 6-figure partnership inquiries)
+    partnership_pillars: Optional[List[Literal["talent_pipeline", "brand_architecture", "curriculum_arm", "impact_narrative", "custom_cohort", "exec_access"]]] = None
+    desired_range: Optional[Literal["50k_100k", "100k_250k", "250k_500k", "500k_plus", "design_together"]] = None
+    hero_outcome: Optional[str] = None  # "What's the ONE thing a successful partnership would give you?"
 
 
 @api_router.post("/sponsor/inquire")
@@ -1434,6 +1458,9 @@ async def sponsor_inquire(body: SponsorInquiry, request: Request):
         "budget_tier": body.budget_tier,
         "round_interest": (body.round_interest or "").strip()[:200] or None,
         "message": message,
+        "partnership_pillars": body.partnership_pillars or None,
+        "desired_range": body.desired_range,
+        "hero_outcome": (body.hero_outcome or "").strip()[:1000] or None if body.hero_outcome else None,
         "source_ip": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent", "")[:300] or None,
         "status": "new",
@@ -1675,8 +1702,12 @@ async def miles_chat(req: MilesChatRequest, user: User = Depends(get_current_use
 
     today = date.today().isoformat()
     daily_count = user.miles_daily_count if user.miles_daily_count_date == today else 0
+    used_booster = False
     if daily_count >= MILES_DAILY_MESSAGE_CAP:
-        raise HTTPException(status_code=429, detail="daily_cap_reached")
+        if user.miles_boosters_remaining > 0:
+            used_booster = True
+        else:
+            raise HTTPException(status_code=429, detail="daily_cap_reached")
 
     remaining_before = MILES_DAILY_MESSAGE_CAP - daily_count
     persona = MILES_PERSONAS[user.miles_persona]
@@ -1728,13 +1759,16 @@ async def miles_chat(req: MilesChatRequest, user: User = Depends(get_current_use
 
     new_exchange = user.miles_exchange_count_since_summary + 1
     new_daily = daily_count + 1
+    miles_update = {
+        "miles_daily_count": new_daily,
+        "miles_daily_count_date": today,
+        "miles_exchange_count_since_summary": new_exchange,
+    }
+    if used_booster:
+        miles_update["miles_boosters_remaining"] = max(0, user.miles_boosters_remaining - 1)
     await db.users.update_one(
         {"user_id": user.user_id},
-        {"$set": {
-            "miles_daily_count": new_daily,
-            "miles_daily_count_date": today,
-            "miles_exchange_count_since_summary": new_exchange,
-        }},
+        {"$set": miles_update},
     )
 
     updated_memory = user.miles_memory_card
@@ -1951,6 +1985,384 @@ async def admin_miles_documentary(_: bool = Depends(require_admin)):
     yes_count = sum(1 for u in users if u.get("miles_documentary_interest") == "yes")
     maybe_count = sum(1 for u in users if u.get("miles_documentary_interest") == "maybe")
     return {"users": users, "total": len(users), "yes_count": yes_count, "maybe_count": maybe_count}
+
+
+# =============================================================================
+# Phase 1C — Stripe Checkout (one-time payments for boosters, founding locks,
+# sponsor tiers). Subscriptions will be layered in once the user migrates to
+# their live Stripe account + creates recurring Price IDs.
+# =============================================================================
+
+from emergentintegrations.payments.stripe.checkout import (  # noqa: E402
+    StripeCheckout,
+    CheckoutSessionRequest,
+)
+
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+
+# Server-defined product catalog — NEVER trust client prices
+STRIPE_PRODUCTS = {
+    "booster_max_30": {
+        "name": "Max Booster Pack",
+        "description": "+200 extra messages with Max (kid coach)",
+        "amount": 2.99,
+        "currency": "usd",
+        "kind": "booster",
+        "target": "max",
+        "auth_required": True,
+    },
+    "booster_maya_30": {
+        "name": "Maya Booster Pack",
+        "description": "+200 extra messages with Maya (parent coach)",
+        "amount": 2.99,
+        "currency": "usd",
+        "kind": "booster",
+        "target": "maya",
+        "auth_required": True,
+    },
+    "booster_miles_30": {
+        "name": "Miles Booster Pack",
+        "description": "+200 extra messages with your Miles Academy coach",
+        "amount": 2.99,
+        "currency": "usd",
+        "kind": "booster",
+        "target": "miles",
+        "auth_required": True,
+    },
+    "founding_family_lock": {
+        "name": "Founding Parent — Family Plan",
+        "description": "Lock in $14.50/mo for 1 year (launches at $29/mo)",
+        "amount": 14.50,
+        "currency": "usd",
+        "kind": "founding_lock",
+        "target": "family",
+        "auth_required": True,
+    },
+    "founding_miles_lock": {
+        "name": "Founding Miles",
+        "description": "Lock in $9.50/mo for 1 year (launches at $19/mo)",
+        "amount": 9.50,
+        "currency": "usd",
+        "kind": "founding_lock",
+        "target": "miles",
+        "auth_required": True,
+    },
+    "sponsor_spotlight": {
+        "name": "Max Pitch Spotlight Sponsor",
+        "description": "Power one round of Max Pitch",
+        "amount": 5000.00,
+        "currency": "usd",
+        "kind": "sponsor",
+        "target": "spotlight",
+        "auth_required": False,
+    },
+    "sponsor_anchor": {
+        "name": "Max Pitch Anchor Sponsor",
+        "description": "Year-long Max Pitch flywheel — 3 rounds + microsite + CSV",
+        "amount": 15000.00,
+        "currency": "usd",
+        "kind": "sponsor",
+        "target": "anchor",
+        "auth_required": False,
+    },
+}
+
+
+class StripeCheckoutRequest(BaseModel):
+    product_id: str
+    origin_url: str  # frontend origin, never trusted for price
+    sponsor_inquiry_id: Optional[str] = None  # for sponsor tier purchases — links back to the inquiry
+    sponsor_email: Optional[str] = None  # used when sponsor purchases without auth
+    sponsor_name: Optional[str] = None
+
+
+async def _get_optional_user(
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+) -> Optional[User]:
+    """Best-effort auth resolver — returns None instead of 401. Used for sponsor endpoints."""
+    try:
+        token = session_token
+        if not token and authorization and authorization.startswith("Bearer "):
+            token = authorization[7:]
+        if not token:
+            return None
+        session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+        if not session:
+            return None
+        expires_at = session["expires_at"]
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            return None
+        user_doc = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+        if not user_doc:
+            return None
+        return User(**user_doc)
+    except Exception:
+        return None
+
+
+@api_router.post("/stripe/checkout")
+async def stripe_create_checkout(
+    body: StripeCheckoutRequest,
+    request: Request,
+    user: Optional[User] = Depends(_get_optional_user),
+):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    product = STRIPE_PRODUCTS.get(body.product_id)
+    if not product:
+        raise HTTPException(status_code=400, detail="Unknown product")
+
+    # Auth gate — boosters + founding locks require a logged-in user
+    if product["auth_required"] and not user:
+        raise HTTPException(status_code=401, detail="Login required for this purchase")
+
+    # Origin validation — must be http/https
+    origin = (body.origin_url or "").strip().rstrip("/")
+    if not origin.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid origin_url")
+
+    # Construct success/cancel URLs from origin
+    success_url = f"{origin}/payment/return?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/payment/return?cancelled=1"
+
+    # Metadata — everything we need to reconcile on status check
+    metadata = {
+        "product_id": body.product_id,
+        "kind": product["kind"],
+        "target": product["target"],
+    }
+    if user:
+        metadata["user_id"] = user.user_id
+        metadata["user_email"] = user.email
+    if body.sponsor_inquiry_id:
+        metadata["sponsor_inquiry_id"] = body.sponsor_inquiry_id
+    if body.sponsor_email and not user:
+        metadata["sponsor_email"] = body.sponsor_email.strip()[:200]
+    if body.sponsor_name and not user:
+        metadata["sponsor_name"] = body.sponsor_name.strip()[:120]
+
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    checkout_req = CheckoutSessionRequest(
+        amount=float(product["amount"]),
+        currency=product["currency"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=metadata,
+    )
+    try:
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+    except Exception as e:
+        logger.exception("Stripe create session failed")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
+
+    # MANDATORY: persist the transaction as pending before handing off to Stripe
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "product_id": body.product_id,
+        "amount": float(product["amount"]),
+        "currency": product["currency"],
+        "kind": product["kind"],
+        "target": product["target"],
+        "metadata": metadata,
+        "user_id": user.user_id if user else None,
+        "user_email": user.email if user else metadata.get("sponsor_email"),
+        "sponsor_inquiry_id": body.sponsor_inquiry_id,
+        "payment_status": "pending",
+        "status": "initiated",
+        "credited": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"url": session.url, "session_id": session.session_id}
+
+
+async def _credit_transaction(tx: dict) -> None:
+    """Idempotent redemption — applies the product effect once per session_id."""
+    if tx.get("credited"):
+        return
+    kind = tx.get("kind")
+    target = tx.get("target")
+    meta = tx.get("metadata") or {}
+    user_id = tx.get("user_id") or meta.get("user_id")
+    now = datetime.now(timezone.utc)
+
+    if kind == "booster" and user_id:
+        field = {"max": "max_boosters_remaining", "maya": "parent_boosters_remaining", "miles": "miles_boosters_remaining"}.get(target)
+        if field:
+            await db.users.update_one({"user_id": user_id}, {"$inc": {field: 200}})
+    elif kind == "founding_lock" and user_id:
+        locked_until = (now + timedelta(days=365)).isoformat()
+        if target == "family":
+            await db.users.update_one({"user_id": user_id}, {"$set": {"family_founding_locked_until": locked_until}})
+            # Also ensure waitlist record exists + marked as paid
+            existing = await db.family_founding_signups.find_one({"user_id": user_id}, {"_id": 0})
+            if not existing:
+                count = await db.family_founding_signups.count_documents({})
+                await db.family_founding_signups.insert_one({
+                    "id": str(uuid.uuid4()), "user_id": user_id,
+                    "email": tx.get("user_email"), "name": meta.get("user_email", "").split("@")[0],
+                    "slot_number": count + 1, "price_locked": 14.50,
+                    "within_cap": (count + 1) <= FOUNDING_PARENT_CAP,
+                    "signed_up_at": now.isoformat(),
+                    "status": "paid", "paid_at": now.isoformat(),
+                    "stripe_session_id": tx.get("session_id"),
+                })
+            else:
+                await db.family_founding_signups.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"status": "paid", "paid_at": now.isoformat(), "stripe_session_id": tx.get("session_id")}},
+                )
+        elif target == "miles":
+            await db.users.update_one({"user_id": user_id}, {"$set": {"miles_founding_locked_until": locked_until}})
+            existing = await db.miles_founding_signups.find_one({"user_id": user_id}, {"_id": 0})
+            if not existing:
+                count = await db.miles_founding_signups.count_documents({})
+                await db.miles_founding_signups.insert_one({
+                    "id": str(uuid.uuid4()), "user_id": user_id,
+                    "email": tx.get("user_email"), "name": meta.get("user_email", "").split("@")[0],
+                    "slot_number": count + 1, "price_locked": 9.50,
+                    "within_cap": (count + 1) <= MILES_FOUNDING_CAP,
+                    "signed_up_at": now.isoformat(),
+                    "status": "paid", "paid_at": now.isoformat(),
+                    "stripe_session_id": tx.get("session_id"),
+                })
+            else:
+                await db.miles_founding_signups.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"status": "paid", "paid_at": now.isoformat(), "stripe_session_id": tx.get("session_id")}},
+                )
+    elif kind == "sponsor":
+        # Update the sponsor inquiry if linked
+        inquiry_id = tx.get("sponsor_inquiry_id") or meta.get("sponsor_inquiry_id")
+        if inquiry_id:
+            await db.sponsor_inquiries.update_one(
+                {"id": inquiry_id},
+                {"$set": {
+                    "status": "paid", "tier_purchased": target,
+                    "amount_paid": tx.get("amount"), "paid_at": now.isoformat(),
+                    "stripe_session_id": tx.get("session_id"),
+                }},
+            )
+
+    await db.payment_transactions.update_one(
+        {"session_id": tx["session_id"]},
+        {"$set": {"credited": True, "credited_at": now.isoformat()}},
+    )
+
+
+@api_router.get("/stripe/status/{session_id}")
+async def stripe_check_status(session_id: str, request: Request):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    try:
+        status = await stripe_checkout.get_checkout_status(session_id)
+    except Exception as e:
+        logger.exception("Stripe status check failed")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
+
+    # Persist latest state
+    update = {
+        "payment_status": status.payment_status,
+        "status": status.status,
+        "last_checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.payment_transactions.update_one({"session_id": session_id}, {"$set": update})
+
+    # Credit once, only on successful paid state
+    if status.payment_status == "paid" and not tx.get("credited"):
+        fresh_tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        if fresh_tx and not fresh_tx.get("credited"):
+            await _credit_transaction(fresh_tx)
+
+    return {
+        "session_id": session_id,
+        "status": status.status,
+        "payment_status": status.payment_status,
+        "amount_total": status.amount_total,
+        "currency": status.currency,
+        "product_id": tx.get("product_id"),
+        "kind": tx.get("kind"),
+        "target": tx.get("target"),
+        "credited": tx.get("credited") or status.payment_status == "paid",
+    }
+
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    if not STRIPE_API_KEY:
+        return {"ok": False}
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    try:
+        event = await stripe_checkout.handle_webhook(body, sig)
+    except Exception as e:
+        logger.warning(f"Stripe webhook verify failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+
+    session_id = getattr(event, "session_id", None)
+    payment_status = getattr(event, "payment_status", None)
+    if session_id and payment_status == "paid":
+        tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        if tx and not tx.get("credited"):
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_status": "paid", "status": "complete", "webhook_received_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            fresh = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+            if fresh and not fresh.get("credited"):
+                await _credit_transaction(fresh)
+    return {"ok": True}
+
+
+@api_router.get("/stripe/products")
+async def stripe_list_products():
+    """Public-ish listing of purchasable products (for UI rendering)."""
+    return {
+        "products": [
+            {"product_id": k, "name": v["name"], "description": v["description"],
+             "amount": v["amount"], "currency": v["currency"], "kind": v["kind"], "target": v["target"]}
+            for k, v in STRIPE_PRODUCTS.items()
+        ]
+    }
+
+
+@api_router.get("/stripe/my-purchases")
+async def stripe_my_purchases(user: User = Depends(get_current_user)):
+    """Current user's booster + founding lock status."""
+    today = date.today().isoformat()
+    return {
+        "max_boosters_remaining": user.max_boosters_remaining,
+        "parent_boosters_remaining": user.parent_boosters_remaining,
+        "miles_boosters_remaining": user.miles_boosters_remaining,
+        "family_founding_locked_until": user.family_founding_locked_until,
+        "miles_founding_locked_until": user.miles_founding_locked_until,
+        "date": today,
+    }
+
+
+@api_router.get("/admin/stripe/transactions")
+async def admin_stripe_transactions(_: bool = Depends(require_admin)):
+    txs = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    total_paid = sum(t["amount"] for t in txs if t.get("payment_status") == "paid")
+    return {"transactions": txs, "total": len(txs), "total_paid_usd": round(total_paid, 2)}
 
 
 # -----------------------------

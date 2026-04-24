@@ -75,7 +75,7 @@ await page.context.add_cookies([{
     "secure": True,
     "sameSite": "None"
 }])
-await page.goto("https://your-app.preview.emergentagent.com")
+await page.goto("https://app-builder-4470.preview.emergentagent.com")
 ```
 
 ## Cleanup

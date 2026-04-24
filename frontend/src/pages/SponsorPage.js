@@ -1,12 +1,31 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { apiJSON, apiFetch } from "../lib/api";
+import { startCheckout } from "../lib/stripe";
 
 const BUDGET_TIERS = [
   { id: "under_10k", label: "Under $10K" },
   { id: "10k_50k", label: "$10K – $50K" },
   { id: "50k_plus", label: "$50K+" },
+  { id: "lead_partner", label: "6-figure / Lead Partner" },
   { id: "unsure", label: "Not sure yet" },
+];
+
+const PARTNERSHIP_PILLARS = [
+  { id: "talent_pipeline", label: "Talent pipeline", desc: "First-look at every Max Pitch finalist + raw application CSV" },
+  { id: "brand_architecture", label: "Brand architecture", desc: "Title sponsor placement across rounds + co-produced reality series" },
+  { id: "curriculum_arm", label: "Curriculum arm", desc: "Branded subject pathway inside Miles Academy (your ICP, your domain)" },
+  { id: "impact_narrative", label: "Impact narrative", desc: "Co-branded annual impact report — meaningful for ESG/CSR reporting" },
+  { id: "custom_cohort", label: "Custom cohort", desc: "Curate your own 20-kid cohort sourced from your ICP themes" },
+  { id: "exec_access", label: "Executive access", desc: "Place your C-suite as Max Pitch judges — talent acquisition built-in" },
+];
+
+const DESIRED_RANGES = [
+  { id: "50k_100k", label: "$50K – $100K" },
+  { id: "100k_250k", label: "$100K – $250K" },
+  { id: "250k_500k", label: "$250K – $500K" },
+  { id: "500k_plus", label: "$500K+" },
+  { id: "design_together", label: "Let's design together" },
 ];
 
 function formatDeadline(iso) {
@@ -29,10 +48,14 @@ export default function SponsorPage() {
     budget_tier: "",
     round_interest: "",
     message: "",
+    partnership_pillars: [],
+    desired_range: "",
+    hero_outcome: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(null); // tier id while loading
 
   useEffect(() => {
     apiJSON("/pitch/public-stats").then(setStats).catch(() => {});
@@ -40,9 +63,63 @@ export default function SponsorPage() {
 
   const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  const togglePillar = (id) => {
+    const cur = form.partnership_pillars || [];
+    setForm({
+      ...form,
+      partnership_pillars: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+    });
+  };
+
+  const buyTier = async (productId, tierId) => {
+    if (checkoutLoading) return;
+    // Soft pre-flight: capture the prospect's email + company by routing them through the form first
+    // if they haven't filled it in. This way we have a follow-up trail if Stripe checkout is abandoned.
+    if (!form.name.trim() || !form.email.trim() || !form.company.trim()) {
+      setCheckoutLoading(null);
+      setErr(`Tell us your name, company, and email below, then we'll open Stripe for the ${tierId} tier.`);
+      const formEl = document.querySelector('[data-testid="sponsor-form"]');
+      if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setCheckoutLoading(tierId);
+    setErr(null);
+    try {
+      // First persist a lite inquiry so we have a paper trail even if checkout is abandoned
+      let inquiryId = null;
+      try {
+        const inq = await apiFetch("/sponsor/inquire", {
+          method: "POST",
+          body: JSON.stringify({
+            name: form.name.trim(),
+            company: form.company.trim(),
+            email: form.email.trim(),
+            role: form.role.trim() || null,
+            budget_tier: tierId === "anchor" ? "50k_plus" : "10k_50k",
+            round_interest: form.round_interest.trim() || null,
+            message: `[${tierId.toUpperCase()} CHECKOUT INITIATED] ${form.message.trim() || "Direct tier purchase from /sponsor page."}`,
+          }),
+        });
+        const inqData = await inq.json().catch(() => ({}));
+        inquiryId = inqData?.inquiry_id || null;
+      } catch {
+        // non-blocking — the Stripe flow can still succeed
+      }
+      await startCheckout(productId, {
+        sponsor_email: form.email.trim(),
+        sponsor_name: form.name.trim(),
+        sponsor_inquiry_id: inquiryId || undefined,
+      });
+    } catch (e) {
+      setErr(e.message || "Couldn't start checkout");
+      setCheckoutLoading(null);
+    }
+  };
+
   const submit = async () => {
     if (submitting) return;
     setErr(null);
+    const isLeadPartner = form.budget_tier === "lead_partner";
     const payload = {
       name: form.name.trim(),
       company: form.company.trim(),
@@ -51,9 +128,16 @@ export default function SponsorPage() {
       budget_tier: form.budget_tier || null,
       round_interest: form.round_interest.trim() || null,
       message: form.message.trim(),
+      partnership_pillars: isLeadPartner && form.partnership_pillars?.length ? form.partnership_pillars : null,
+      desired_range: isLeadPartner ? form.desired_range || null : null,
+      hero_outcome: isLeadPartner ? form.hero_outcome.trim() || null : null,
     };
     if (!payload.name || !payload.company || !payload.email || payload.message.length < 20) {
       setErr("Name, company, email, and a 20+ character message are required.");
+      return;
+    }
+    if (isLeadPartner && (!payload.partnership_pillars || payload.partnership_pillars.length === 0)) {
+      setErr("Pick at least one partnership pillar so we can prep a meaningful first call.");
       return;
     }
     setSubmitting(true);
@@ -81,6 +165,7 @@ export default function SponsorPage() {
   const TIERS = [
     {
       id: "spotlight",
+      product_id: "sponsor_spotlight",
       name: "Spotlight",
       price: "$5,000",
       oneLiner: "Your brand on one round.",
@@ -94,6 +179,7 @@ export default function SponsorPage() {
     },
     {
       id: "anchor",
+      product_id: "sponsor_anchor",
       name: "Anchor",
       price: "$15,000",
       oneLiner: "Year-long flywheel.",
@@ -108,15 +194,17 @@ export default function SponsorPage() {
       accent: "hsl(25,100%,60%)",
     },
     {
-      id: "custom",
-      name: "Enterprise",
-      price: "Let's talk",
-      oneLiner: "Bespoke partnership.",
+      id: "lead_partner",
+      product_id: null,  // no fixed price — strategic conversation
+      name: "Lead Partner",
+      price: "Build with us",
+      oneLiner: "For 6-figure partners who want their name on the platform — not on a logo wall.",
       bullets: [
-        "Full-season title sponsorship",
-        "Custom round theme aligned to your ICP",
-        "Featured across all Business of Life surfaces (Max, Maya, Miles Academy)",
-        "Executive hiring pipeline + documentary integration",
+        "Co-produced reality series integration (you're in the credits, not in the ad break)",
+        "Title sponsorship: every Max Pitch finalist + Miles Academy curriculum cohort framed as 'Presented by you'",
+        "Custom cohort: design a 20-kid track around your company's ICP, your domain, your brand voice",
+        "Executive judging seats — your C-suite gets first-look at every finalist for hire pipeline",
+        "Annual co-branded impact report — meaningful in your CSR/ESG narrative",
       ],
       accent: "hsl(270,80%,65%)",
     },
@@ -303,6 +391,37 @@ export default function SponsorPage() {
                   </li>
                 ))}
               </ul>
+              {t.product_id ? (
+                <button
+                  onClick={() => buyTier(t.product_id, t.id)}
+                  disabled={checkoutLoading === t.id}
+                  data-testid={`sponsor-tier-buy-${t.id}`}
+                  className="w-full mt-4 py-3 rounded-xl font-bold text-sm disabled:opacity-50"
+                  style={{
+                    background: `linear-gradient(135deg, ${t.accent}, ${t.accent.replace(",60%)", ",48%)").replace(",55%)", ",43%)")})`,
+                    color: "white",
+                  }}
+                >
+                  {checkoutLoading === t.id ? "Opening Stripe…" : `Sponsor for ${t.price} →`}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setForm((f) => ({ ...f, budget_tier: "lead_partner" }));
+                    const formEl = document.querySelector('[data-testid="sponsor-form"]');
+                    if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  data-testid={`sponsor-tier-buy-${t.id}`}
+                  className="w-full mt-4 py-3 rounded-xl font-bold text-sm"
+                  style={{
+                    background: "transparent",
+                    color: t.accent,
+                    border: `1.5px solid ${t.accent}`,
+                  }}
+                >
+                  Start the conversation →
+                </button>
+              )}
             </motion.div>
           ))}
         </div>
@@ -402,6 +521,134 @@ export default function SponsorPage() {
                   ))}
                 </div>
               </div>
+
+              <AnimatePresence>
+                {form.budget_tier === "lead_partner" && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    data-testid="sponsor-form-lead-partner"
+                    className="overflow-hidden"
+                  >
+                    <div
+                      className="p-4 rounded-2xl mt-2 space-y-4"
+                      style={{
+                        background: "linear-gradient(135deg, hsla(270,80%,65%,0.08), hsla(213,100%,60%,0.04))",
+                        border: "1px solid hsla(270,80%,65%,0.35)",
+                      }}
+                    >
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(270,80%,75%)" }}>
+                          Lead Partner — strategic intake
+                        </div>
+                        <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,68%)" }}>
+                          You're not buying ad placement. You're co-architecting a platform. Tell us which levers
+                          actually matter to you.
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-bold mb-2" style={{ color: "hsl(210,20%,90%)" }}>
+                          Which pillars do you want to anchor? (pick any)
+                        </div>
+                        <div className="space-y-2">
+                          {PARTNERSHIP_PILLARS.map((p) => {
+                            const active = (form.partnership_pillars || []).includes(p.id);
+                            return (
+                              <button
+                                key={p.id}
+                                onClick={() => togglePillar(p.id)}
+                                data-testid={`sponsor-pillar-${p.id}`}
+                                className="w-full text-left p-3 rounded-xl transition-all"
+                                style={{
+                                  background: active ? "hsla(270,80%,65%,0.18)" : "hsl(220,30%,12%)",
+                                  border: `1px solid ${active ? "hsla(270,80%,65%,0.45)" : "hsl(220,30%,20%)"}`,
+                                }}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div
+                                    className="w-4 h-4 rounded mt-0.5 flex items-center justify-center text-[10px] flex-shrink-0"
+                                    style={{
+                                      background: active ? "hsl(270,80%,65%)" : "hsl(220,30%,18%)",
+                                      color: "white",
+                                    }}
+                                  >
+                                    {active ? "✓" : ""}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div
+                                      className="text-xs font-bold"
+                                      style={{ color: active ? "hsl(270,80%,80%)" : "hsl(210,20%,90%)" }}
+                                    >
+                                      {p.label}
+                                    </div>
+                                    <div className="text-[11px] mt-0.5" style={{ color: "hsl(220,15%,60%)" }}>
+                                      {p.desc}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-bold mb-2" style={{ color: "hsl(210,20%,90%)" }}>
+                          Working budget range (optional)
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          {DESIRED_RANGES.map((r) => (
+                            <button
+                              key={r.id}
+                              onClick={() =>
+                                setForm({ ...form, desired_range: form.desired_range === r.id ? "" : r.id })
+                              }
+                              data-testid={`sponsor-range-${r.id}`}
+                              className="text-xs px-3 py-1.5 rounded-full font-semibold"
+                              style={{
+                                background:
+                                  form.desired_range === r.id ? "hsla(270,80%,65%,0.2)" : "hsl(220,30%,14%)",
+                                color: form.desired_range === r.id ? "hsl(270,80%,80%)" : "hsl(220,15%,65%)",
+                                border: `1px solid ${
+                                  form.desired_range === r.id ? "hsla(270,80%,65%,0.4)" : "hsl(220,30%,22%)"
+                                }`,
+                              }}
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-bold mb-1" style={{ color: "hsl(210,20%,90%)" }}>
+                          What's the ONE outcome a successful partnership would give you that no other media buy
+                          can?
+                        </div>
+                        <textarea
+                          value={form.hero_outcome}
+                          onChange={update("hero_outcome")}
+                          data-testid="sponsor-form-hero-outcome"
+                          rows={3}
+                          placeholder="The honest answer is the most useful one."
+                          className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                          style={{
+                            background: "hsl(220,30%,12%)",
+                            border: "1px solid hsl(220,30%,22%)",
+                            color: "hsl(210,20%,90%)",
+                          }}
+                        />
+                        <div className="text-[10px] mt-1" style={{ color: "hsl(220,15%,40%)" }}>
+                          {form.hero_outcome.length}/1000
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <input
                 value={form.round_interest}
                 onChange={update("round_interest")}

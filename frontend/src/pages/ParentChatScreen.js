@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiJSON } from "../lib/api";
+import { startCheckout } from "../lib/stripe";
 
 const MAYA_OPENER =
   "Hey. Maya here — your coach for running family life without losing yourself in it. Tell me the real thing on your mind today: what's feeling heaviest, which kid you're wrestling with, or where you personally feel stuck. We don't do surface-level here.";
@@ -35,6 +36,12 @@ function TypingIndicator() {
 }
 
 function UpgradeWall({ onFounding, onBack }) {
+  const [boosting, setBoosting] = useState(false);
+  const buyBooster = async () => {
+    if (boosting) return;
+    setBoosting(true);
+    try { await startCheckout("booster_maya_30"); } catch { setBoosting(false); }
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -47,9 +54,21 @@ function UpgradeWall({ onFounding, onBack }) {
         You've used today's 30 messages
       </div>
       <div className="text-sm mb-8 leading-relaxed" style={{ color: "hsl(220,15%,62%)" }}>
-        Resets at midnight. Or — if Maya is already part of your rhythm — lock in the Founding Parent rate before
-        launch.
+        Resets at midnight. Or — if Maya is already part of your rhythm — pick up another 200 messages, or lock in
+        the Founding Parent rate before launch.
       </div>
+      <button
+        onClick={buyBooster}
+        disabled={boosting}
+        data-testid="maya-upgrade-booster-btn"
+        className="w-full max-w-xs py-3.5 rounded-2xl font-bold text-sm mb-3 disabled:opacity-50"
+        style={{
+          background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(213,100%,45%))",
+          color: "white",
+        }}
+      >
+        {boosting ? "Opening Stripe…" : "+200 messages · $2.99 →"}
+      </button>
       <button
         onClick={onFounding}
         data-testid="maya-upgrade-founding-btn"
