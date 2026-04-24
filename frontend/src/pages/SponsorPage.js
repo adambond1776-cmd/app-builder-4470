@@ -55,6 +55,7 @@ export default function SponsorPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState(null);
+  const [showFormError, setShowFormError] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(null); // tier id while loading
 
   useEffect(() => {
@@ -77,13 +78,20 @@ export default function SponsorPage() {
     // if they haven't filled it in. This way we have a follow-up trail if Stripe checkout is abandoned.
     if (!form.name.trim() || !form.email.trim() || !form.company.trim()) {
       setCheckoutLoading(null);
-      setErr(`Tell us your name, company, and email below, then we'll open Stripe for the ${tierId} tier.`);
+      const msg = `Quick step before Stripe — fill in your name, company, and email below. We'll open the ${
+        tierId === "spotlight" ? "Spotlight" : "Anchor"
+      } checkout right after.`;
+      setErr(msg);
+      setShowFormError(true);
       const formEl = document.querySelector('[data-testid="sponsor-form"]');
       if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Auto-clear the prompt after 8s so the form looks clean once they engage
+      setTimeout(() => setShowFormError(false), 8000);
       return;
     }
     setCheckoutLoading(tierId);
     setErr(null);
+    setShowFormError(false);
     try {
       // First persist a lite inquiry so we have a paper trail even if checkout is abandoned
       let inquiryId = null;
@@ -447,6 +455,29 @@ export default function SponsorPage() {
             eyeing.
           </div>
 
+          <AnimatePresence>
+            {showFormError && err && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -8, height: 0 }}
+                className="overflow-hidden mb-4"
+                data-testid="sponsor-form-validation-banner"
+              >
+                <div
+                  className="flex items-start gap-2 p-3 rounded-xl"
+                  style={{
+                    background: "hsla(0,80%,55%,0.12)",
+                    border: "1px solid hsla(0,80%,55%,0.4)",
+                    color: "hsl(0,80%,80%)",
+                  }}
+                >
+                  <span className="text-sm flex-shrink-0">⚠️</span>
+                  <span className="text-xs leading-relaxed">{err}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {submitted ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

@@ -1467,7 +1467,7 @@ async def sponsor_inquire(body: SponsorInquiry, request: Request):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.sponsor_inquiries.insert_one(doc)
-    return {"ok": True}
+    return {"ok": True, "inquiry_id": doc["id"]}
 
 
 @api_router.get("/admin/sponsor/inquiries")

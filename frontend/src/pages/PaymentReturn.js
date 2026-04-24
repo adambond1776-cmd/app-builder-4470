@@ -62,6 +62,11 @@ export default function PaymentReturn() {
         }
       } catch (e) {
         setErr(e.message || "Status check failed");
+        // 404 means the session isn't on our records — surface error after 2 attempts
+        if (e.status === 404 && pollCountRef.current >= 1) {
+          setState("error");
+          return;
+        }
         // keep trying until MAX_POLLS — network blips shouldn't give up
       }
       const delay = POLL_SCHEDULE_MS[pollCountRef.current] ?? 4000;

@@ -154,6 +154,33 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 
 **Test coverage:** 19 new backend tests + 35 regression = **54/54 green** (`/app/backend/tests/test_pitch_hub_sponsor.py`). Full Playwright validation of both public pages — search, sort, track filter, card navigation, sponsor form validation + success state, zero console errors.
 
+## April 24 — Phase 1C: Stripe Checkout Live (boosters + founding locks + sponsor tiers)
+
+**Domain locked:** `MilesAcademy.app` purchased by Adam. Display brand `MILES_BRAND_NAME = "Miles Academy"` already matches — no code change needed.
+
+**What shipped:**
+- **Stripe integration** via `emergentintegrations.payments.stripe.checkout` — test key `sk_test_emergent` in `/app/backend/.env`, no Stripe Dashboard setup required for beta.
+- **Server-defined product catalog** (7 SKUs, prices NEVER trusted from frontend):
+  - `booster_max_30` / `booster_maya_30` / `booster_miles_30` — $2.99 → +200 messages on the matching counter
+  - `founding_family_lock` $14.50 → 365-day Family Plan founding rate lock + waitlist `status=paid`
+  - `founding_miles_lock` $9.50 → 365-day Founding Miles rate lock + waitlist `status=paid`
+  - `sponsor_spotlight` $5,000 / `sponsor_anchor` $15,000 → updates linked sponsor_inquiry to `status=paid`
+- **Boosters fully wired into chat cap-hit logic** across all 3 chat surfaces — when Max/Maya/Miles daily counter hits 30, if user has boosters>0 the message succeeds and decrements 1 from `*_boosters_remaining` instead of 429.
+- **Idempotent crediting** — `credited` flag on `payment_transactions` prevents double-credit. Both polling endpoint and webhook converge to same `_credit_transaction(tx)` reducer.
+- **Polling-first credit pattern** per playbook — `GET /api/stripe/status/:session_id` is the primary credit mechanism; webhook is reinforcement for delayed methods. `PaymentReturn.js` polls with exponential backoff (1.2s → 6s, 8 attempts, ~20s total) then surfaces a friendly "still processing" state.
+- **Lead Partner sponsor tier** (the 6-figure ask) — no fixed price, expanded strategic intake form with **6 partnership pillars** (talent_pipeline, brand_architecture, curriculum_arm, impact_narrative, custom_cohort, exec_access), 5 working budget ranges ($50K–$500K+ / "design together"), and the killer hero-outcome question: *"What's the ONE outcome a successful partnership would give you that no other media buy can?"* Positions the buyer as co-architect, not logo sponsor.
+- **Pre-flight inquiry capture on tier-buy** — clicking Spotlight or Anchor without filling name/company/email scrolls to the form with a friendly visible validation banner. Once filled, a sponsor_inquiry doc is created BEFORE Stripe checkout opens — so we have a follow-up paper trail even on abandoned checkouts.
+- **New collection:** `payment_transactions` (mandatory per playbook, with `credited` idempotency).
+- **Admin endpoint:** `GET /api/admin/stripe/transactions` returns full ledger + total_paid_usd.
+
+**Out of scope (Phase 2):**
+- True auto-renewing subscriptions (requires user's live Stripe account + recurring Price IDs)
+- Stripe billing portal (manage card, cancel subscription)
+- Refund automation
+- Receipt customization
+
+**Test coverage:** 22 new Stripe tests + 89 regression = **111/111 green** (`/app/backend/tests/test_stripe_phase1c.py`). All idempotency, auth-gating, booster consumption, and credit logic verified. Frontend Playwright validation of /payment/return states + sponsor tier flows + Lead Partner expansion all pass. 3 optional polish items from the testing agent applied (return inquiry_id from /sponsor/inquire, 404-handling on payment status polling, visible validation banner on tier-buy).
+
 ## Backlog / Prioritized Roadmap (as of Apr 24, 2026)
 
 **P1 — next up:**
