@@ -142,6 +142,18 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - `MILES_DAILY_MESSAGE_CAP = 30`, `MILES_FOUNDING_PRICE = 9.50`, `MILES_LAUNCH_PRICE = 19`, `MILES_FOUNDING_CAP = 50`
 - `MILES_VALID_PERSONAS`, `MILES_VALID_SUBJECTS`, `MILES_FEATURE_POLL_OPTIONS`
 
+## April 24 — Public Max Pitch Hub shipped (P1 — organic sharability)
+
+**What shipped:**
+- **`/pitches`** — Public, no-auth pitches index at the domain root level. Hero + live stats (pitches / upvotes / videos) + dual CTAs (Pitch Yourself + Sponsor a Round) + search + Top/Newest sort + per-track filter chips + responsive 2-column-friendly max-width layout. Kids share this URL on social to rally community votes beyond the individual `/pitch/:slug` page.
+- **`/sponsor`** — Corporate sponsor landing page. Bold hero ("Back the next generation — before they're already expensive"), live round stats, 3 "Why sponsors come back" rationale cards (documentary moments / talent pipeline / compound brand equity), **3 sponsorship tiers** (Spotlight $5K, **Anchor $15K featured**, Enterprise custom), full inquiry form with budget-tier chips (Under $10K / $10K–$50K / $50K+ / Not sure yet).
+- **Backend public aggregates:** `GET /api/pitch/public-stats` — round_name, deadline, sponsor info, totals (pitches/upvotes/videos), per-track breakdown. No PII. Safe for any public surface.
+- **Backend lead capture:** `POST /api/sponsor/inquire` — public endpoint with email + 20-char-min-message validation; persists source_ip + user_agent + timestamped `sponsor_inquiries` doc.
+- **Admin:** `GET /api/admin/sponsor/inquiries` — CSV-ready list sorted desc by created_at. Adam follows up within 2 business days per the form copy.
+- **New collection:** `sponsor_inquiries`.
+
+**Test coverage:** 19 new backend tests + 35 regression = **54/54 green** (`/app/backend/tests/test_pitch_hub_sponsor.py`). Full Playwright validation of both public pages — search, sort, track filter, card navigation, sponsor form validation + success state, zero console errors.
+
 ## Backlog / Prioritized Roadmap (as of Apr 24, 2026)
 
 **P1 — next up:**
