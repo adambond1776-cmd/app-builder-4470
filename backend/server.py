@@ -673,6 +673,31 @@ async def pitch_feed():
     return {"pitches": await cursor.to_list(200)}
 
 
+@api_router.get("/pitch/public-stats")
+async def pitch_public_stats():
+    """Public aggregate stats for the /pitches + /sponsor pages. No PII, safe to expose."""
+    pitches = await db.pitch_submissions.find(
+        {"round_name": CURRENT_ROUND_NAME}, {"_id": 0, "upvote_count": 1, "track": 1, "youtube_url": 1}
+    ).to_list(500)
+    total_pitches = len(pitches)
+    total_upvotes = sum(p.get("upvote_count", 0) or 0 for p in pitches)
+    videos = sum(1 for p in pitches if p.get("youtube_url"))
+    tracks = {}
+    for p in pitches:
+        t = p.get("track") or "Unspecified"
+        tracks[t] = tracks.get(t, 0) + 1
+    return {
+        "round_name": CURRENT_ROUND_NAME,
+        "round_deadline": CURRENT_ROUND_DEADLINE,
+        "sponsor_name": CURRENT_ROUND_SPONSOR_NAME,
+        "sponsor_url": CURRENT_ROUND_SPONSOR_URL,
+        "total_pitches": total_pitches,
+        "total_upvotes": total_upvotes,
+        "total_videos": videos,
+        "tracks": [{"track": k, "count": v} for k, v in sorted(tracks.items(), key=lambda x: -x[1])],
+    }
+
+
 @api_router.get("/pitch/{slug}")
 async def pitch_detail(slug: str):
     doc = await db.pitch_submissions.find_one({"slug": slug}, {"_id": 0, "user_id": 0})
@@ -1373,6 +1398,55 @@ async def admin_family_polls(_: bool = Depends(require_admin)):
 async def admin_family_founding(_: bool = Depends(require_admin)):
     items = await db.family_founding_signups.find({}, {"_id": 0}).sort("slot_number", 1).to_list(500)
     return {"signups": items, "cap": FOUNDING_PARENT_CAP}
+
+
+# -----------------------------
+# Sponsor inquiry — public form on /sponsor page, admin CSV export
+# -----------------------------
+class SponsorInquiry(BaseModel):
+    name: str
+    company: str
+    email: str
+    role: Optional[str] = None
+    budget_tier: Optional[Literal["under_10k", "10k_50k", "50k_plus", "unsure"]] = None
+    round_interest: Optional[str] = None
+    message: str
+
+
+@api_router.post("/sponsor/inquire")
+async def sponsor_inquire(body: SponsorInquiry, request: Request):
+    # Light validation — public endpoint, be strict on length/format
+    name = (body.name or "").strip()[:120]
+    company = (body.company or "").strip()[:200]
+    email = (body.email or "").strip()[:200]
+    message = (body.message or "").strip()[:2000]
+    if not name or not company or not email or len(message) < 20:
+        raise HTTPException(status_code=400, detail="Name, company, email, and a 20+ char message required")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "company": company,
+        "email": email,
+        "role": (body.role or "").strip()[:120] or None,
+        "budget_tier": body.budget_tier,
+        "round_interest": (body.round_interest or "").strip()[:200] or None,
+        "message": message,
+        "source_ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", "")[:300] or None,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.sponsor_inquiries.insert_one(doc)
+    return {"ok": True}
+
+
+@api_router.get("/admin/sponsor/inquiries")
+async def admin_sponsor_inquiries(_: bool = Depends(require_admin)):
+    items = await db.sponsor_inquiries.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return {"inquiries": items, "total": len(items)}
 
 
 # =============================================================================

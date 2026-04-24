@@ -1,0 +1,28 @@
+{
+  "summary": "Max Pitch Hub (/pitches) + Sponsor landing (/sponsor) end-to-end validation PASSED. 19/19 new backend tests (test_pitch_hub_sponsor.py) + 35/35 Max+Maya regression = 54/54 green, no route collisions (Max/Maya/Miles chat endpoints still return 401 unauth, not 404). Public endpoints verified no-auth + no PII leakage. Frontend Playwright confirmed /pitches and /sponsor render without session_token cookie; all data-testids present and wired; search/sort/track-filter/card-nav all functional; sponsor form validation + valid-submit success state working.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_pitch_hub_sponsor.py",
+    "/app/test_reports/pytest/pitch_hub_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1981 lines (up from 1907 last iter, from 1389 at iter 1). The sponsor inquiry model + handler + admin route and pitch public-stats handler keep accumulating in the same file. The 'split into routers/ + services/' advice from iterations 1-3 is now 4 features overdue.",
+    "SponsorInquiry email validation is a manual string check ('@' + '.' in TLD segment). FastAPI/Pydantic EmailStr would catch more edge cases (e.g. 'a@.com', 'a@@b.c', unicode). Low-risk for a public lead-capture form, but worth switching to EmailStr for consistency.",
+    "POST /api/sponsor/inquire has no rate limiting visible. Public unauthenticated write endpoint is a spam/abuse vector — recommend simple per-IP throttle (e.g. 5/min) or a honeypot field before launch.",
+    "sponsor_inquiries documents store source_ip + user_agent but no TTL index. GDPR/CCPA minimization suggests either masking the IP (as ip_hash is done for pitch_upvotes) or adding a retention window.",
+    "Public /api/pitch/public-stats computes aggregates with find(..).to_list(500) then sums in Python. Fine at current scale but a Mongo $facet aggregation pipeline would scale better past ~10k pitches.",
+    "/api/admin/sponsor/inquiries has no pagination (to_list(1000) hardcoded). Will silently truncate past 1000 inquiries — fine for Phase 1, flag for later."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pitch_hub_sponsor.py (new — 19 tests)"
+  ],
+  "success_rate": { "backend": "100% (19/19 new + 35/35 Max+Maya regression = 54/54)", "frontend": "100% (/pitches render, search, sort, track-filter, card-nav, sponsor CTA; /sponsor render, 3 tiers, form validation, valid-submit success)" },
+  "test_credentials": "Public endpoints + pages need no auth. Admin header X-Admin-Token=adm_1771f205fb49b1910a7172bc4f532d16 for /api/admin/sponsor/inquiries. Parent session token test_parent_1777042439177 still valid for authed regressions.",
+  "seed_data_creation": "Did NOT touch the 4 pre-seeded Round 1 pitches (ids p1-p4 per main agent spec: Maya Johnson/School, Jordan Reyes/Trade, Alex Chen/Figuring It Out, Sam Patel/Work — aggregates match: 4 pitches, 203 upvotes total, 1 video). Created ~5 TEST_-prefixed sponsor_inquiries during testing — all deleted via mongosh + pytest module-teardown. 1 pre-existing non-TEST inquiry preserved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Pitch Hub + Sponsor regression suite lives at /app/backend/tests/test_pitch_hub_sponsor.py (19 tests, ~3s). Covers public-stats contract + seed-reflection + PII-safety, pitch/feed regression, sponsor/inquire happy + 6 validation paths + persistence, admin/sponsor/inquiries auth+sort, and 3 route-collision probes. Run with: pytest /app/backend/tests/test_pitch_hub_sponsor.py -v. Frontend testids documented inline in test_pitch_hub_sponsor frontend script: pitches-hub-page, pitches-hub-{submit,sponsor}-cta, pitches-hub-search, pitches-hub-sort-{top,newest}, pitches-hub-track-{all,<slug>}, pitches-hub-card-<slug>; sponsor-page, sponsor-tier-{spotlight,anchor,custom}, sponsor-form, sponsor-form-{name,company,email,role,round,message,submit,success}, sponsor-form-budget-{under_10k,10k_50k,50k_plus,unsure}. Note: 3rd sponsor tier is visually labeled 'Enterprise' but its data-testid is 'sponsor-tier-custom' per spec — that's correct.",
+  "rca of the issue": "N/A — zero defects. Backend validates: short message rejected (400), missing @/TLD rejected (400), empty name rejected (400), invalid budget_tier Literal rejected (422), missing required fields (422), valid payload persists with status='new' + source_ip + user_agent. Admin endpoint rejects missing+bad tokens, returns desc-sorted list with matching total. Public pitch aggregates reflect seed exactly (Round 1 · Founding Pitch, 4 pitches, 203 upvotes, 1 video, 4 tracks). Route collision probes confirm /api/chat, /api/family/chat, /api/miles/chat all still 401 (exist, need auth) rather than 404. Frontend: all 4 seeded pitch cards render on /pitches unauth; search 'Jordan' narrows to 1; sort toggles clickable; card click routes to /pitch/<slug>; sponsor CTA routes to /sponsor; /sponsor renders 3 tiers + full form unauth; short-message submit does NOT transition to success; valid submit shows sponsor-form-success 'Thank you — message received.'; zero console errors either page."
+}
