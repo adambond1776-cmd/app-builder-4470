@@ -117,6 +117,31 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - `PARENT_SUMMARY_EVERY_N_EXCHANGES = 6`
 - `PARENT_CHAT_MODEL = "claude-sonnet-4-6"` / `PARENT_SUMMARY_MODEL = "claude-haiku-4-5-20251001"`
 
+## April 24 — Miles Academy shipped (academic-edge / homeschool / tutor-supplement vertical)
+
+**Strategic context:** Extends the Max/Maya family into a third vertical — the academic-edge / homeschool / tutor-supplement layer of The Business of Life. Accessible from **both** Kid Mode (Max home) and Parent Mode (Maya dashboard) — parents use it for homeschool orchestration, kids use it directly for subject help.
+
+**What shipped:**
+- **Three persona coaches** (user picks one on onboarding, swappable):
+  - **Ivy** 🌿 — warm, patient, encouraging (teal-green brand)
+  - **Vance** 🚀 — motivational, inspirational, vision-caster (amber)
+  - **Drake** 🎯 — rigorous, structured, hard truths with warmth (steel-blue)
+- **9 subjects** auto-context the prompt: math, writing, reading, science, history, languages, test_prep, college_apps, general
+- **Reality documentary opt-in** (yes/maybe/no) collected on onboarding — every Miles beta user is a potential reality-show subject, with their explicit permission. Admin endpoint `/api/admin/miles/documentary-interest` exports the candidate pool.
+- **Same cost-saving architecture as Max/Maya:** Claude Sonnet 4.6 main chat, Haiku memory-card summarization every 6 exchanges, max_tokens caps, fully isolated `miles_daily_count` + `miles_memory_card`.
+- **Progressive upgrade funnel:** normal → approaching (≤10) → final_five (≤5 — with in-reply line from coach in their voice) → exhausted (429 + Founding Miles wall).
+- **Founding Miles pricing:** $9.50/mo locked for a year for first 50 families; launches at $19/mo (undercuts Aidemia's $19.99 while adding the whole ecosystem).
+- **Co-creation loop:** Ideas (subject/format/tutor/homeschool/other), Polls (curriculum_planner / standards_alignment / live_tutor_sessions / college_apps_studio / subject_deep_dives / parent_copilot / sibling_accounts), Founding Miles waitlist.
+- **Brand-swap safe:** Brand name reads from `MILES_BRAND_NAME` config constant — if the `milesacademy.*` domain isn't available, renaming is a one-line swap.
+- **New collections:** `miles_chat_logs`, `miles_ideas`, `miles_poll_votes`, `miles_founding_signups`.
+
+**Test coverage:** 35 new Miles backend tests + 35 regression (Max + Maya) = **70/70 green**. Full Playwright frontend flow validated. Tests at `/app/backend/tests/test_miles_academy.py`.
+
+**Config knobs** (all in `/app/backend/config.py`):
+- `MILES_BRAND_NAME = "Miles Academy"` / `MILES_BRAND_SHORT = "Miles"` — swap-safe
+- `MILES_DAILY_MESSAGE_CAP = 30`, `MILES_FOUNDING_PRICE = 9.50`, `MILES_LAUNCH_PRICE = 19`, `MILES_FOUNDING_CAP = 50`
+- `MILES_VALID_PERSONAS`, `MILES_VALID_SUBJECTS`, `MILES_FEATURE_POLL_OPTIONS`
+
 ## Backlog / Prioritized Roadmap (as of Apr 24, 2026)
 
 **P1 — next up:**
