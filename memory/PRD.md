@@ -88,6 +88,49 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - Kid can unlink anytime → parent loses all access immediately
 - Splitting into standalone Family OS app in future = migrate 6 collections + move `/family/*` routes to new service
 
-**Deferred to v1:** Parent AI coach, weekly family meeting assistant, Family Burners framework, multi-parent support, Stripe integration (Family Plan real payment), public idea voting (kids can upvote parent ideas), maxcoach.mom domain routing.
+**Deferred to v1:** ~~Parent AI coach~~ **(shipped Apr 24 — see below)**, weekly family meeting assistant, Family Burners framework, multi-parent support, Stripe integration (Family Plan real payment), public idea voting (kids can upvote parent ideas), maxcoach.mom domain routing.
 
 **Business model cemented:** Free tier for kids (organic growth). Parents pay Family Plan at $29/mo (or founding $14.50). Aligns incentives, recurring revenue, natural upgrade path.
+
+## April 24 — Maya Parent Coach shipped (Family OS v1)
+
+**What shipped:**
+- **Maya** — Claude Sonnet 4.6 parent coach, warm/direct voice, Four Family Burners framework (Structure, Connection, Resources, Individual Growth)
+- `POST /api/family/chat` / `GET /api/family/chat/history` / `GET/PUT/DELETE /api/family/memory` — parent-role-gated, onboarding-required
+- **Memory Card for parents** — separate `parent_memory_card` field, summarized by Claude Haiku every 6 exchanges (same cost-saving architecture as kid's Max)
+- **Parent-specific daily cap (30/day)** — isolated `parent_daily_count` + `parent_daily_count_date` so a future "both"-role user has zero counter collisions
+- **Progressive upgrade nudges** baked into API response:
+  - `limit_state: "normal"` (>10 remaining) — no banner
+  - `limit_state: "approaching"` (≤10) — soft yellow banner
+  - `limit_state: "final_five"` (≤5) — orange→purple banner + one-line Founding Parent nudge injected into Maya's reply (in her own voice)
+  - `limit_state: "exhausted"` (30 used) — 429 from API, full upgrade wall on frontend with Founding Parent CTA
+- **`ParentChatScreen.js`** with purple Maya brand identity (distinct from Max's blue), history rehydration on mount, graceful exhausted-state handling
+- **Hero CTA** — "Talk to Maya · Your parent coach" at the top of Parent Dashboard
+- **New collection:** `parent_chat_logs` (kept separate from kid `chat_logs`)
+
+**Test coverage:** 18 new backend tests + 17 kid regression = 35/35 green. Full Playwright frontend flow validated. See `/app/backend/tests/test_maya_parent_chat.py`.
+
+**Config knobs** (all in `/app/backend/config.py`):
+- `PARENT_DAILY_MESSAGE_CAP = 30`
+- `PARENT_NUDGE_APPROACHING = 10`
+- `PARENT_NUDGE_FINAL = 5`
+- `PARENT_SUMMARY_EVERY_N_EXCHANGES = 6`
+- `PARENT_CHAT_MODEL = "claude-sonnet-4-6"` / `PARENT_SUMMARY_MODEL = "claude-haiku-4-5-20251001"`
+
+## Backlog / Prioritized Roadmap (as of Apr 24, 2026)
+
+**P1 — next up:**
+- Amazon book link for *The Business of Life: Student Edition* (blocked on user providing URL — kid-facing pages)
+- Public Max Pitch Hub landing pages — `/pitches` index + `/sponsor` corporate landing page for sharability
+- Stripe booster packs ($2.99 / 200 messages) + Maya upgrade wall CTA wired to live Stripe checkout
+
+**P2:**
+- Apple sign-in + email/password JWT fallback alongside Emergent Google Auth
+- Weekly burner self-check + progress charts (kid side)
+- Family Plan ($29/mo) live Stripe checkout
+- Maya voice polish: weekly family-meeting assistant prompt variant
+
+**P3 — refactoring:**
+- Split `/app/backend/server.py` (1,390 lines) into `routers/` (auth, chat, family, pitch, admin) + `services/` (parent_memory, kid_memory) + `prompts/`
+- Public voting mechanic for Parent Ideas (kids upvote parents' feature ideas)
+- maxcoach.mom domain routing
