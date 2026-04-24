@@ -1,9 +1,15 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
-import FourBurnersSheet from "../components/FourBurnersSheet";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { QUOTES } from "./FourBurnersPage";
 
-export default function WelcomeScreen({ onStart, onBack }) {
-  const [showBurners, setShowBurners] = useState(false);
+export default function WelcomeScreen({ onStart, onBack, onOpenBurners }) {
+  const [qIdx, setQIdx] = useState(0);
+  const teaserQuotes = [QUOTES[0], QUOTES[2], QUOTES[4], QUOTES[6]]; // Elon, Bezos, Huberman, Naval
+  useEffect(() => {
+    const t = setInterval(() => setQIdx((i) => (i + 1) % teaserQuotes.length), 6000);
+    return () => clearInterval(t);
+  }, []);
+  const tq = teaserQuotes[qIdx];
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full px-6 text-center relative overflow-hidden" data-testid="welcome-screen">
@@ -36,20 +42,28 @@ export default function WelcomeScreen({ onStart, onBack }) {
           ))}
         </motion.div>
 
-        <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} onClick={() => setShowBurners(true)} data-testid="welcome-burners-link" className="text-xs underline underline-offset-2" style={{ color: "hsl(213,100%,60%)" }}>
+        <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} onClick={onOpenBurners} data-testid="welcome-burners-link" className="text-xs underline underline-offset-2" style={{ color: "hsl(213,100%,60%)" }}>
           What are the Four Burners?
         </motion.button>
 
-        <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} whileTap={{ scale: 0.97 }} onClick={onStart} data-testid="welcome-start-btn" className="mt-4 px-10 py-4 rounded-2xl text-base font-bold tracking-wide" style={{ background: "linear-gradient(135deg, hsl(213,100%,58%) 0%, hsl(213,100%,48%) 100%)", boxShadow: "0 0 24px hsla(213,100%,60%,0.4), 0 4px 16px rgba(0,0,0,0.4)", color: "#fff" }}>
-          Let's Go
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="max-w-xs w-full h-16 flex items-center justify-center px-2" data-testid="welcome-quote-teaser">
+          <AnimatePresence mode="wait">
+            <motion.div key={qIdx} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.8 }} className="text-center">
+              <p className="text-xs italic leading-relaxed" style={{ color: "hsl(220,15%,55%)" }}>"{tq.text.length > 110 ? tq.text.slice(0, 110) + "…" : tq.text}"</p>
+              <p className="text-[10px] font-semibold mt-1" style={{ color: tq.color }}>— {tq.author} · 🔥 {tq.burner}</p>
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+
+        <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} whileTap={{ scale: 0.97 }} onClick={onStart} data-testid="welcome-start-btn" className="mt-4 px-10 py-4 rounded-2xl text-base font-bold tracking-wide flex items-center gap-3" style={{ background: "linear-gradient(135deg, hsl(213,100%,58%) 0%, hsl(213,100%,48%) 100%)", boxShadow: "0 0 24px hsla(213,100%,60%,0.4), 0 4px 16px rgba(0,0,0,0.4)", color: "#fff" }}>
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#fff" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" opacity=".9"/><path fill="#fff" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" opacity=".7"/><path fill="#fff" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" opacity=".95"/></svg>
+          Sign in with Google
         </motion.button>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }} className="text-xs" style={{ color: "hsl(220,15%,40%)" }}>
           Companion to The Business of Life: Student Edition
         </motion.p>
       </motion.div>
-
-      <FourBurnersSheet open={showBurners} onClose={() => setShowBurners(false)} />
     </div>
   );
 }

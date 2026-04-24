@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import FourBurnersSheet from "../components/FourBurnersSheet";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { apiJSON, API } from "../lib/api";
 
 const TRACK_EMOJI = { "School Track": "🎓", "Work Track": "💼", "Trade Track": "🔧", "Figuring It Out Track": "🔍" };
 const TRACK_OPENERS = {
@@ -33,7 +32,7 @@ function FeedbackButtons({ messageIndex, track, messageContent }) {
     if (rating) return;
     setRating(value);
     try {
-      await fetch(`${API}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageIndex, rating: value, track, preview: messageContent.slice(0, 100) }) });
+      await fetch(`${API}/feedback`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageIndex, rating: value, track, preview: messageContent.slice(0, 100) }) });
     } catch {}
   };
   if (rating) return <div className="mt-1 ml-10 text-xs" style={{ color: "hsl(220,15%,40%)" }}>{rating === "up" ? "Glad that landed ✓" : "Got it, I'll do better ✓"}</div>;
@@ -45,36 +44,37 @@ function FeedbackButtons({ messageIndex, track, messageContent }) {
   );
 }
 
-export default function ChatScreen({ track, onChangeTrack, onBack }) {
+export default function ChatScreen({ track, onChangeTrack, onBack, onOpenBurners, onUserUpdated }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: TRACK_OPENERS[track] || TRACK_OPENERS["Figuring It Out Track"] }]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [exchangeCount, setExchangeCount] = useState(0);
-  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [capHit, setCapHit] = useState(false);
+  const [remaining, setRemaining] = useState(null);
   const [showBurners, setShowBurners] = useState(false);
-  const [sessionId] = useState(() => `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const endRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || capHit) return;
     const userMsg = { role: "user", content: text };
     const updated = [...messages, userMsg];
     setMessages(updated);
     setInput("");
     setIsLoading(true);
-    const newCount = exchangeCount + 1;
-    setExchangeCount(newCount);
-    if (newCount === 10) setShowSavePrompt(true);
     try {
-      const res = await fetch(`${API}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated, track, sessionId }) });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Request failed");
-      const data = await res.json();
+      const data = await apiJSON("/chat", { method: "POST", body: JSON.stringify({ messages: updated, track }) });
       setMessages(prev => [...prev, { role: "assistant", content: data.message }]);
+      setRemaining(data.remaining_today);
+      if (data.memory_card !== undefined) onUserUpdated?.();
     } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", content: `Hmm, hit a snag: ${err.message}. Try again in a sec.` }]);
+      if (err.status === 429) {
+        setCapHit(true);
+        setMessages(prev => [...prev, { role: "assistant", content: "You've hit today's 30-message limit — nice grind. Come back tomorrow, or Booster Packs drop in Phase 1C. Go live your life in the meantime." }]);
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: `Hmm, hit a snag: ${err.message}. Try again.` }]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -104,14 +104,10 @@ export default function ChatScreen({ track, onChangeTrack, onBack }) {
       </div>
 
       <AnimatePresence>
-        {showSavePrompt && (
+        {remaining !== null && remaining <= 5 && !capHit && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex-shrink-0 overflow-hidden">
-            <div className="px-4 py-3 flex items-center gap-3" style={{ background: "hsla(25,100%,55%,0.12)", borderBottom: "1px solid hsla(25,100%,55%,0.25)" }}>
-              <div className="flex-1 text-xs leading-relaxed" style={{ color: "hsl(25,100%,70%)" }}>
-                Your journey is worth documenting. Create your free account at{" "}
-                <a href="https://HiddenGeniusInvitational.com" target="_blank" rel="noopener noreferrer" className="font-bold underline" style={{ color: "hsl(25,100%,75%)" }}>HiddenGeniusInvitational.com</a>
-              </div>
-              <button onClick={() => setShowSavePrompt(false)} className="text-xs px-2 py-1 rounded" style={{ color: "hsl(25,100%,60%)" }}>✕</button>
+            <div className="px-4 py-2 text-center text-xs" style={{ background: "hsla(25,100%,55%,0.1)", color: "hsl(25,100%,70%)", borderBottom: "1px solid hsla(25,100%,55%,0.2)" }}>
+              {remaining} {remaining === 1 ? "message" : "messages"} left today
             </div>
           </motion.div>
         )}
