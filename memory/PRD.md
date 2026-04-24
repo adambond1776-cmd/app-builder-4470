@@ -49,3 +49,20 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
   - Returns user counts, track breakdown, documentary interest, Founding 20 pipeline (with `revenue_ready_leads`), engagement metrics
 - `GET /api/admin/founding20/export.csv` — CSV dump of all Founding 20 applications for manual outreach / Stripe Payment Link blast
 - Admin token + usage examples stored at `/app/memory/ADMIN.md`
+
+## Max Pitch — shipped April 24 (Phase 1.5)
+
+**What it is:** A matchmaking funnel where kids pitch themselves to be coached 1-on-1 by senior execs for 90 days. Community upvotes signal to judges, but judges pick based on fit — not pure popularity. This is the sponsor-attractable, documentary-worthy surface.
+
+**Features shipped:**
+- Pitch submission (3-paragraph text required + optional YouTube unlisted link) — one per user per round
+- **Public pitch pages** at `/pitch/:slug` — shareable, no-login-required, viral by design
+- **Anonymous upvoting** (IP-rate-limited 30/day) with "sign in to track" nudge after voting
+- Authed upvoting dedupes by user_id
+- **Judge magic-link flow** at `/judge?token=xxx` — no accounts needed
+- Judge flagging ("I'd coach them" / "Pass") with optional notes
+- **Admin match matrix** at `/api/admin/pitch/matrix` — Adam's final-selection worksheet
+- Round config in `/app/backend/config.py` — sponsor name, deadline, round name all configurable with no code change
+- Home screen CTA card to Max Pitch for authed users
+
+**Why this matters:** This is the primary sponsor-attraction surface. "Intro.co powered Round 3 of Max Pitch" or "Sponsored coaching delivered to 12 kids this quarter" is concrete, measurable, and TV-friendly.

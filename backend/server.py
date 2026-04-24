@@ -18,6 +18,9 @@ from config import (
     MAIN_CHAT_MODEL, SUMMARY_MODEL, MAX_REPLY_TOKENS, SUMMARY_MAX_TOKENS,
     SUMMARY_EVERY_N_EXCHANGES, RAW_HISTORY_KEEP, DAILY_MESSAGE_CAP,
     FOUNDING_20_CAP, SESSION_DAYS,
+    CURRENT_ROUND_NAME, CURRENT_ROUND_DEADLINE,
+    CURRENT_ROUND_SPONSOR_NAME, CURRENT_ROUND_SPONSOR_URL,
+    PITCH_TEXT_MAX_CHARS, UPVOTE_RATE_LIMIT_PER_IP_PER_DAY,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -551,6 +554,259 @@ async def admin_founding_export(_: bool = Depends(require_admin)):
     return PlainTextResponse(buf.getvalue(), media_type="text/csv", headers={
         "Content-Disposition": 'attachment; filename="founding20_applications.csv"'
     })
+
+
+# -----------------------------
+# Max Pitch — matchmaking coaching funnel
+# -----------------------------
+import hashlib
+import re
+
+def slugify(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return s[:40] if s else "pitch"
+
+def ip_hash(ip: str) -> str:
+    return hashlib.sha256((ip or "unknown").encode()).hexdigest()[:16]
+
+
+class PitchSubmit(BaseModel):
+    pitch_text: str
+    youtube_url: Optional[str] = None
+
+
+class JudgeFlag(BaseModel):
+    interested: bool
+    note: Optional[str] = ""
+
+
+@api_router.get("/pitch/round")
+async def pitch_round():
+    return {
+        "name": CURRENT_ROUND_NAME,
+        "deadline": CURRENT_ROUND_DEADLINE,
+        "sponsor_name": CURRENT_ROUND_SPONSOR_NAME,
+        "sponsor_url": CURRENT_ROUND_SPONSOR_URL,
+    }
+
+
+@api_router.post("/pitch/submit")
+async def pitch_submit(req: PitchSubmit, user: User = Depends(get_current_user)):
+    if not user.age_confirmed or not user.beta_consent:
+        raise HTTPException(status_code=403, detail="Complete signup first")
+    text = (req.pitch_text or "").strip()
+    if len(text) < 80:
+        raise HTTPException(status_code=400, detail="Pitch too short (min 80 chars)")
+    if len(text) > PITCH_TEXT_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"Pitch too long (max {PITCH_TEXT_MAX_CHARS} chars)")
+
+    yt = (req.youtube_url or "").strip() or None
+    if yt and not re.match(r"^https?://(www\.)?(youtube\.com|youtu\.be)/", yt):
+        raise HTTPException(status_code=400, detail="YouTube URL must be a youtube.com or youtu.be link")
+
+    # One submission per user per round
+    existing = await db.pitch_submissions.find_one(
+        {"user_id": user.user_id, "round_name": CURRENT_ROUND_NAME}, {"_id": 0}
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Already submitted for this round")
+
+    base = slugify(user.name or user.email.split("@")[0])
+    slug = f"{base}-{uuid.uuid4().hex[:6]}"
+    doc = {
+        "id": str(uuid.uuid4()),
+        "slug": slug,
+        "user_id": user.user_id,
+        "name": user.name,
+        "track": user.current_track,
+        "picture": user.picture,
+        "pitch_text": text,
+        "youtube_url": yt,
+        "round_name": CURRENT_ROUND_NAME,
+        "upvote_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.pitch_submissions.insert_one(doc)
+    return {"ok": True, "slug": slug}
+
+
+@api_router.get("/pitch/mine")
+async def pitch_mine(user: User = Depends(get_current_user)):
+    doc = await db.pitch_submissions.find_one(
+        {"user_id": user.user_id, "round_name": CURRENT_ROUND_NAME}, {"_id": 0}
+    )
+    return doc
+
+
+@api_router.get("/pitch/feed")
+async def pitch_feed():
+    cursor = db.pitch_submissions.find(
+        {"round_name": CURRENT_ROUND_NAME},
+        {"_id": 0, "user_id": 0},
+    ).sort("upvote_count", -1).limit(200)
+    return {"pitches": await cursor.to_list(200)}
+
+
+@api_router.get("/pitch/{slug}")
+async def pitch_detail(slug: str):
+    doc = await db.pitch_submissions.find_one({"slug": slug}, {"_id": 0, "user_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Pitch not found")
+    return doc
+
+
+@api_router.post("/pitch/{slug}/upvote")
+async def pitch_upvote(slug: str, request: Request, session_token: Optional[str] = Cookie(None), authorization: Optional[str] = Header(None)):
+    doc = await db.pitch_submissions.find_one({"slug": slug}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Pitch not found")
+
+    # Detect authed user (optional — don't 401 if not logged in)
+    voter_user_id = None
+    token = session_token
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    if token:
+        session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+        if session:
+            voter_user_id = session.get("user_id")
+
+    ip = request.client.host if request.client else "unknown"
+    ip_h = ip_hash(ip)
+    today = date.today().isoformat()
+
+    # Dedup: per user_id if authed, else per ip_hash — one vote per pitch per voter
+    dedup_filter = {"pitch_slug": slug}
+    if voter_user_id:
+        dedup_filter["voter_user_id"] = voter_user_id
+    else:
+        dedup_filter["ip_hash"] = ip_h
+        dedup_filter["voter_user_id"] = None
+
+    already = await db.pitch_upvotes.find_one(dedup_filter, {"_id": 0})
+    if already:
+        return {"ok": True, "already_voted": True, "upvote_count": doc["upvote_count"], "authed": bool(voter_user_id)}
+
+    # Anon rate limit per IP per day
+    if not voter_user_id:
+        anon_today = await db.pitch_upvotes.count_documents({"ip_hash": ip_h, "voter_user_id": None, "date": today})
+        if anon_today >= UPVOTE_RATE_LIMIT_PER_IP_PER_DAY:
+            raise HTTPException(status_code=429, detail="Daily vote limit hit. Sign in to keep voting.")
+
+    await db.pitch_upvotes.insert_one({
+        "id": str(uuid.uuid4()),
+        "pitch_slug": slug,
+        "voter_user_id": voter_user_id,
+        "ip_hash": ip_h,
+        "date": today,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await db.pitch_submissions.update_one({"slug": slug}, {"$inc": {"upvote_count": 1}})
+    new_count = doc["upvote_count"] + 1
+    return {"ok": True, "upvote_count": new_count, "authed": bool(voter_user_id)}
+
+
+@api_router.get("/pitch/{slug}/my-upvote")
+async def pitch_my_upvote(slug: str, user: User = Depends(get_current_user)):
+    exists = await db.pitch_upvotes.find_one({"pitch_slug": slug, "voter_user_id": user.user_id}, {"_id": 0})
+    return {"upvoted": bool(exists)}
+
+
+# --- Judge endpoints (magic-token based, no auth) ---
+async def _get_judge_by_token(token: str):
+    if not token:
+        raise HTTPException(status_code=401, detail="Judge token required")
+    judge = await db.pitch_judges.find_one({"token": token, "active": True}, {"_id": 0})
+    if not judge:
+        raise HTTPException(status_code=401, detail="Invalid judge token")
+    return judge
+
+
+@api_router.get("/pitch/judge/me")
+async def judge_me(token: Optional[str] = None):
+    judge = await _get_judge_by_token(token)
+    return {"name": judge["name"], "id": judge["id"]}
+
+
+@api_router.get("/pitch/judge/pitches")
+async def judge_pitches(token: Optional[str] = None):
+    judge = await _get_judge_by_token(token)
+    cursor = db.pitch_submissions.find(
+        {"round_name": CURRENT_ROUND_NAME},
+        {"_id": 0, "user_id": 0},
+    ).sort("upvote_count", -1).limit(500)
+    pitches = await cursor.to_list(500)
+    flags = await db.pitch_judge_flags.find({"judge_id": judge["id"]}, {"_id": 0}).to_list(500)
+    flag_map = {f["pitch_slug"]: f for f in flags}
+    for p in pitches:
+        f = flag_map.get(p["slug"])
+        p["judge_flag"] = {"interested": f["interested"], "note": f.get("note", "")} if f else None
+    return {"pitches": pitches, "judge_name": judge["name"]}
+
+
+@api_router.post("/pitch/judge/flag/{slug}")
+async def judge_flag(slug: str, body: JudgeFlag, token: Optional[str] = None):
+    judge = await _get_judge_by_token(token)
+    doc = await db.pitch_submissions.find_one({"slug": slug}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Pitch not found")
+    await db.pitch_judge_flags.update_one(
+        {"judge_id": judge["id"], "pitch_slug": slug},
+        {"$set": {
+            "judge_id": judge["id"],
+            "judge_name": judge["name"],
+            "pitch_slug": slug,
+            "interested": body.interested,
+            "note": (body.note or "")[:500],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+# --- Admin: manage judges + view match matrix ---
+class JudgeCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+
+
+@api_router.post("/admin/pitch/judges")
+async def admin_create_judge(body: JudgeCreate, _: bool = Depends(require_admin)):
+    judge_id = f"judge_{uuid.uuid4().hex[:10]}"
+    token = f"jt_{uuid.uuid4().hex}{uuid.uuid4().hex[:8]}"
+    doc = {
+        "id": judge_id, "name": body.name, "email": body.email,
+        "token": token, "active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.pitch_judges.insert_one(doc)
+    return {"id": judge_id, "name": body.name, "token": token, "magic_link_suffix": f"/judge?token={token}"}
+
+
+@api_router.get("/admin/pitch/judges")
+async def admin_list_judges(_: bool = Depends(require_admin)):
+    judges = await db.pitch_judges.find({}, {"_id": 0}).to_list(200)
+    return {"judges": judges}
+
+
+@api_router.delete("/admin/pitch/judges/{judge_id}")
+async def admin_deactivate_judge(judge_id: str, _: bool = Depends(require_admin)):
+    await db.pitch_judges.update_one({"id": judge_id}, {"$set": {"active": False}})
+    return {"ok": True}
+
+
+@api_router.get("/admin/pitch/matrix")
+async def admin_matrix(_: bool = Depends(require_admin)):
+    pitches = await db.pitch_submissions.find({"round_name": CURRENT_ROUND_NAME}, {"_id": 0, "user_id": 0}).sort("upvote_count", -1).to_list(500)
+    flags = await db.pitch_judge_flags.find({}, {"_id": 0}).to_list(2000)
+    by_slug = {}
+    for f in flags:
+        by_slug.setdefault(f["pitch_slug"], []).append({"judge_name": f["judge_name"], "interested": f["interested"], "note": f.get("note", "")})
+    for p in pitches:
+        p["judge_flags"] = by_slug.get(p["slug"], [])
+        p["interested_count"] = sum(1 for f in p["judge_flags"] if f["interested"])
+    return {"round_name": CURRENT_ROUND_NAME, "pitches": pitches}
 
 
 # -----------------------------

@@ -9,7 +9,7 @@ const BURNERS = [
   { label: "Self", color: "hsl(270,80%,65%)" },
 ];
 
-export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onLogout }) {
+export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onOpenMaxPitch, onLogout }) {
   const [f20, setF20] = useState(null);
 
   useEffect(() => {
@@ -81,6 +81,16 @@ export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenB
           {f20?.applied
             ? "Your application is under review. Adam personally reviews each one."
             : "Weekly 1-on-1 coaching with Adam Bond Devereau for 90 days. 3 spots free. This is an application — not everyone gets in."}
+        </div>
+      </motion.button>
+
+
+      {/* Max Pitch CTA */}
+      <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} onClick={onOpenMaxPitch} data-testid="home-maxpitch-cta" className="text-left mt-3 p-4 rounded-2xl" style={{ background: "linear-gradient(135deg, hsla(213,100%,60%,0.08), hsla(270,80%,65%,0.04))", border: "1px solid hsla(213,100%,60%,0.25)" }}>
+        <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(213,100%,65%)" }}>🎤 Max Pitch</div>
+        <div className="text-sm font-bold mb-1" style={{ color: "hsl(210,20%,92%)" }}>Pitch yourself for free executive coaching</div>
+        <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,60%)" }}>
+          Submit a pitch, rally upvotes, get matched with a senior exec for a 90-day coaching sprint.
         </div>
       </motion.button>
 
