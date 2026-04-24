@@ -1,0 +1,40 @@
+{
+  "summary": "Phase 1A end-to-end validation PASSED. All 17 backend pytest tests green (health, auth/me, profile, memory CRUD, chat happy-path with real Claude Sonnet 4.6, 403 when signup gate not complete, 401 when no token, 429 daily_cap_reached, memory auto-summary after 6th exchange via Haiku 4.5, founding20 apply + duplicate 400, feedback up + invalid rating 422). Frontend E2E validated via Playwright cookie injection (session_token httpOnly secure sameSite=None on the preview domain worked first try): unauth onboarding->welcome->FourBurners carousel->back; authed SignupGate (age+consent+documentary_interest) -> Home; Home shows all 6 data-testids; MemoryScreen view/edit/save/reset/back; TrackScreen 4 options -> ChatScreen with opening message, live Claude reply ('Hey — welcome. What's actually going on?') rendered, back to Home; Founding20 3-question form submits, shows 'You're in the pool' applied state, DB row persists.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_max_coach_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "config.py sets SUMMARY_MAX_TOKENS=300 but build_memory_card() never passes it to the Haiku call via .with_params(max_tokens=...) — currently that cap is dead code. Works fine because the system prompt says 'Max 5 short lines', but wire the cap through for safety/cost.",
+    "chat() updates current_track from the request unconditionally ({'current_track': track or user.current_track}) — if a user sends a chat with no track param and no prior track, this writes an empty string. Consider only setting when truthy.",
+    "founding20/apply returns {'ok': True} only — frontend relies on state transition. Consider returning the inserted application so the UI doesn't need a second /status call.",
+    "Auth: session expiration comparison already handles tz-naive vs tz-aware — good. But user_sessions has no TTL index on expires_at; expired rows accumulate forever. Add a TTL index: db.user_sessions.create_index('expires_at', expireAfterSeconds=0).",
+    "server.py is 487 lines with routers, models, prompts, LLM calls all in one file. Not blocking, but as Phase 2 grows consider splitting into routers/, models/, services/ modules.",
+    "CORS is allow_origins='*' with allow_credentials=True — browsers reject this combo. It works today because REACT_APP_BACKEND_URL == frontend origin (same-origin via ingress), so no CORS preflight fires. If you ever split domains, this will break silently. Set CORS_ORIGINS explicitly to the preview/prod URL."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_max_coach_api.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "100% (all critical flows)"
+  },
+  "test_credentials": "No real Google account used. Seeded test users directly in MongoDB max_coach.users + max_coach.user_sessions per /app/auth_testing.md. Cookie attrs that worked for the preview domain: name=session_token, domain=app-builder-4470.preview.emergentagent.com, path=/, httpOnly=True, secure=True, sameSite=None. All TEST_* data cleaned up at end of run.",
+  "seed_data_creation": "Each backend test creates an ephemeral TEST_user_* + TEST_sess_* and tears it down via fixture. Memory auto-summary test seeds 5 prior chat_logs with exchange_count_since_summary=5 and fires 1 real /api/chat to trigger the 6-threshold summarizer (avoids 6 real LLM calls). Daily-cap test seeds daily_count=30 with today's ISO date to avoid 30 real calls. All TEST_ prefixed data is purged in session teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression suite lives at /app/backend/tests/test_max_coach_api.py — run with: MONGO_URL=mongodb://localhost:27017 DB_NAME=max_coach REACT_APP_BACKEND_URL=<preview-url> pytest /app/backend/tests/test_max_coach_api.py -v. Takes ~12s total; includes two real Claude calls (happy-path + auto-summary) so needs EMERGENT_LLM_KEY set. For Playwright auth, cookie injection pattern proven: put session_token cookie on the preview domain with sameSite='None', secure=True, httpOnly=True, path='/'. Same-origin ingress means frontend fetch with credentials:'include' will send it automatically. All data-testids in the problem statement exist and render correctly.",
+  "rca of the issue": "N/A — no issues found. Main agent's concern about cookie injection 401 was resolved: the cookie attributes from auth_testing.md (httpOnly, secure, sameSite='None', path='/') worked on the first attempt once the exact preview domain was used."
+}
