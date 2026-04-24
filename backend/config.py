@@ -25,6 +25,9 @@ PITCH_TEXT_MAX_CHARS = 1800  # ~3 paragraphs
 UPVOTE_RATE_LIMIT_PER_IP_PER_DAY = 30  # anti-spam; anonymous votes capped per IP per day
 
 # --- Family OS ---
+PARENT_CHAT_MODEL = "claude-sonnet-4-6"
+PARENT_SUMMARY_MODEL = "claude-haiku-4-5-20251001"
+PARENT_MAX_REPLY_TOKENS = 450  # slightly higher than Max — parents get a little more
 FAMILY_PLAN_LAUNCH_PRICE = 29  # dollars/month at full launch
 FOUNDING_PARENT_PRICE = 14.50  # 50% off, locked for 1 year
 FOUNDING_PARENT_CAP = 100  # first 100 parents get the founding rate
