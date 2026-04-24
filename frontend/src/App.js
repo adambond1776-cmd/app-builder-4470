@@ -12,6 +12,13 @@ import FoundingApply from "./pages/FoundingApply";
 import MaxPitchSubmit from "./pages/MaxPitchSubmit";
 import PitchPublicPage from "./pages/PitchPublicPage";
 import JudgeView from "./pages/JudgeView";
+import RoleSelect from "./pages/RoleSelect";
+import ParentDashboard from "./pages/ParentDashboard";
+import ParentInvite from "./pages/ParentInvite";
+import ParentPolls from "./pages/ParentPolls";
+import ParentIdeas from "./pages/ParentIdeas";
+import ParentFounding from "./pages/ParentFounding";
+import KidAcceptInvite from "./pages/KidAcceptInvite";
 import { apiJSON } from "./lib/api";
 import "./App.css";
 
@@ -97,15 +104,22 @@ export default function App() {
     else if (screen === "burners") body = <FourBurnersPage onBack={() => setScreen("welcome")} />;
     else body = <WelcomeScreen onStart={startLogin} onBack={() => setScreen("onboarding")} onOpenBurners={() => openBurners("welcome")} isAuthed={false} />;
   } else {
-    if (screen === "signup_gate") body = <SignupGate user={user} onComplete={async () => { await refreshUser(); setScreen("home"); }} onBlocked={handleLogout} />;
-    else if (screen === "home") body = <HomeScreen user={user} onContinueChat={() => setScreen(user.current_track ? "chat" : "track")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onLogout={handleLogout} />;
+    if (screen === "signup_gate") body = <SignupGate user={user} onComplete={async () => { await refreshUser(); setScreen(user.role === "parent" ? "parent_home" : "role_select"); }} onBlocked={handleLogout} />;
+    else if (screen === "role_select" || (user.role == null && screen === "home")) body = <RoleSelect user={user} onSelected={async (r) => { await refreshUser(); setScreen(r === "parent" ? "parent_home" : "home"); }} />;
+    else if (user.role === "parent" && ["parent_home", "home"].includes(screen)) body = <ParentDashboard user={user} onLogout={handleLogout} onOpenPolls={() => setScreen("parent_polls")} onOpenIdeas={() => setScreen("parent_ideas")} onOpenFounding={() => setScreen("parent_founding")} onOpenInvite={() => setScreen("parent_invite")} />;
+    else if (screen === "parent_invite") body = <ParentInvite onBack={() => setScreen("parent_home")} />;
+    else if (screen === "parent_polls") body = <ParentPolls onBack={() => setScreen("parent_home")} />;
+    else if (screen === "parent_ideas") body = <ParentIdeas onBack={() => setScreen("parent_home")} />;
+    else if (screen === "parent_founding") body = <ParentFounding onBack={() => setScreen("parent_home")} />;
+    else if (screen === "kid_accept_invite") body = <KidAcceptInvite onBack={() => setScreen("home")} onAccepted={() => setScreen("home")} />;
+    else if (screen === "home") body = <HomeScreen user={user} onContinueChat={() => setScreen(user.current_track ? "chat" : "track")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onLogout={handleLogout} />;
     else if (screen === "track") body = <TrackScreen onSelectTrack={(t) => { setTrack(t); setUser({ ...user, current_track: t }); setScreen("chat"); }} onBack={() => setScreen("home")} />;
     else if (screen === "chat") body = <ChatScreen track={track} onChangeTrack={() => setScreen("track")} onBack={() => setScreen("home")} onOpenBurners={() => openBurners("chat")} onUserUpdated={refreshUser} />;
     else if (screen === "memory") body = <MemoryScreen onBack={() => setScreen("home")} onSaved={(m) => setUser({ ...user, memory_card: m })} />;
     else if (screen === "founding") body = <FoundingApply onBack={() => setScreen("home")} onSubmitted={refreshUser} />;
     else if (screen === "pitch_submit") body = <MaxPitchSubmit onBack={() => setScreen("home")} />;
     else if (screen === "burners") body = <FourBurnersPage onBack={() => setScreen(prevScreen)} />;
-    else body = <HomeScreen user={user} onContinueChat={() => setScreen("chat")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onLogout={handleLogout} />;
+    else body = <HomeScreen user={user} onContinueChat={() => setScreen("chat")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onLogout={handleLogout} />;
   }
 
   return (

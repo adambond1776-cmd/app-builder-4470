@@ -21,6 +21,8 @@ from config import (
     CURRENT_ROUND_NAME, CURRENT_ROUND_DEADLINE,
     CURRENT_ROUND_SPONSOR_NAME, CURRENT_ROUND_SPONSOR_URL,
     PITCH_TEXT_MAX_CHARS, UPVOTE_RATE_LIMIT_PER_IP_PER_DAY,
+    FAMILY_PLAN_LAUNCH_PRICE, FOUNDING_PARENT_PRICE, FOUNDING_PARENT_CAP,
+    INVITE_CODE_EXPIRY_HOURS, FEATURE_POLL_OPTIONS,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -83,6 +85,7 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = None
+    role: Literal["kid", "parent", "both"] = "kid"
     age_confirmed: bool = False
     beta_consent: bool = False
     documentary_interest: Optional[Literal["yes", "maybe", "no"]] = None
@@ -212,6 +215,7 @@ async def auth_session(request: Request, response: Response, x_session_id: Optio
             "email": email,
             "name": data.get("name", ""),
             "picture": data.get("picture"),
+            "role": "kid",
             "age_confirmed": False,
             "beta_consent": False,
             "documentary_interest": None,
@@ -807,6 +811,298 @@ async def admin_matrix(_: bool = Depends(require_admin)):
         p["judge_flags"] = by_slug.get(p["slug"], [])
         p["interested_count"] = sum(1 for f in p["judge_flags"] if f["interested"])
     return {"round_name": CURRENT_ROUND_NAME, "pitches": pitches}
+
+
+# -----------------------------
+# Family OS — parent role, invite/link flow, dashboard, polls, founding plan
+# -----------------------------
+import random
+
+def gen_invite_code() -> str:
+    return "".join(str(random.randint(0, 9)) for _ in range(6))
+
+
+class FamilyInviteCreate(BaseModel):
+    pass
+
+
+class FamilyAcceptInvite(BaseModel):
+    code: str
+    shares_memory_card: bool = True
+    shares_burner_scores: bool = True
+    shares_activity: bool = True
+
+
+class PrivacyUpdate(BaseModel):
+    shares_memory_card: Optional[bool] = None
+    shares_burner_scores: Optional[bool] = None
+    shares_activity: Optional[bool] = None
+
+
+class FamilyIdea(BaseModel):
+    idea: str
+    category: Literal["kid_growth", "parent_tools", "family_life", "other"]
+
+
+class PollVote(BaseModel):
+    option_ids: List[str]  # parent can vote for multiple priorities
+
+
+class FoundingParentSignup(BaseModel):
+    agrees_to_founding_terms: bool
+
+
+def _require_parent(user: User):
+    if user.role not in ("parent", "both"):
+        raise HTTPException(status_code=403, detail="Parent role required")
+
+
+def _require_onboarded(user: User):
+    if not user.age_confirmed or not user.beta_consent:
+        raise HTTPException(status_code=403, detail="Complete onboarding first")
+
+
+@api_router.post("/family/invite")
+async def family_create_invite(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    _require_onboarded(user)
+    # One active code at a time; wipe previous
+    code = gen_invite_code()
+    expires = datetime.now(timezone.utc) + timedelta(hours=INVITE_CODE_EXPIRY_HOURS)
+    await db.family_invitations.delete_many({"parent_user_id": user.user_id, "status": "pending"})
+    await db.family_invitations.insert_one({
+        "id": str(uuid.uuid4()),
+        "code": code,
+        "parent_user_id": user.user_id,
+        "parent_name": user.name,
+        "status": "pending",
+        "expires_at": expires.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"code": code, "expires_at": expires.isoformat(), "hours_valid": INVITE_CODE_EXPIRY_HOURS}
+
+
+@api_router.get("/family/invite/current")
+async def family_current_invite(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    doc = await db.family_invitations.find_one(
+        {"parent_user_id": user.user_id, "status": "pending"}, {"_id": 0}
+    )
+    if not doc:
+        return {"code": None}
+    # Check expiry
+    exp = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00")) if isinstance(doc["expires_at"], str) else doc["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        await db.family_invitations.update_one({"id": doc["id"]}, {"$set": {"status": "expired"}})
+        return {"code": None}
+    return doc
+
+
+@api_router.post("/family/accept")
+async def family_accept_invite(body: FamilyAcceptInvite, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    invite = await db.family_invitations.find_one({"code": body.code, "status": "pending"}, {"_id": 0})
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invalid or used invite code")
+    exp = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00")) if isinstance(invite["expires_at"], str) else invite["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        await db.family_invitations.update_one({"id": invite["id"]}, {"$set": {"status": "expired"}})
+        raise HTTPException(status_code=400, detail="Invite code expired")
+    if invite["parent_user_id"] == user.user_id:
+        raise HTTPException(status_code=400, detail="Can't link to yourself")
+
+    existing = await db.family_links.find_one({"parent_user_id": invite["parent_user_id"], "kid_user_id": user.user_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already linked to this parent")
+
+    await db.family_links.insert_one({
+        "id": str(uuid.uuid4()),
+        "parent_user_id": invite["parent_user_id"],
+        "parent_name": invite["parent_name"],
+        "kid_user_id": user.user_id,
+        "kid_name": user.name,
+        "shares_memory_card": body.shares_memory_card,
+        "shares_burner_scores": body.shares_burner_scores,
+        "shares_activity": body.shares_activity,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await db.family_invitations.update_one({"id": invite["id"]}, {"$set": {"status": "accepted", "accepted_by": user.user_id, "accepted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True, "parent_name": invite["parent_name"]}
+
+
+@api_router.get("/family/my-parent")
+async def family_my_parent(user: User = Depends(get_current_user)):
+    link = await db.family_links.find_one({"kid_user_id": user.user_id}, {"_id": 0})
+    return link
+
+
+@api_router.patch("/family/privacy")
+async def family_update_privacy(body: PrivacyUpdate, user: User = Depends(get_current_user)):
+    link = await db.family_links.find_one({"kid_user_id": user.user_id}, {"_id": 0})
+    if not link:
+        raise HTTPException(status_code=404, detail="Not linked to any parent")
+    changes = {k: v for k, v in body.model_dump().items() if v is not None}
+    if changes:
+        await db.family_links.update_one({"id": link["id"]}, {"$set": changes})
+    updated = await db.family_links.find_one({"id": link["id"]}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/family/unlink")
+async def family_unlink(user: User = Depends(get_current_user)):
+    # Either side can unlink
+    res = await db.family_links.delete_many({"$or": [{"kid_user_id": user.user_id}, {"parent_user_id": user.user_id}]})
+    return {"ok": True, "removed": res.deleted_count}
+
+
+@api_router.get("/family/dashboard")
+async def family_dashboard(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    links = await db.family_links.find({"parent_user_id": user.user_id}, {"_id": 0}).to_list(20)
+    kids = []
+    for link in links:
+        kid = await db.users.find_one({"user_id": link["kid_user_id"]}, {"_id": 0})
+        if not kid:
+            continue
+        today = date.today().isoformat()
+        daily = kid.get("daily_count", 0) if kid.get("daily_count_date") == today else 0
+        recent_turns = await db.chat_logs.count_documents({
+            "user_id": link["kid_user_id"],
+            "timestamp": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()},
+        })
+        shared = {
+            "name": kid.get("name"),
+            "picture": kid.get("picture"),
+            "track": kid.get("current_track"),
+            "linked_at": link.get("created_at"),
+            "privacy": {
+                "shares_memory_card": link.get("shares_memory_card", True),
+                "shares_burner_scores": link.get("shares_burner_scores", True),
+                "shares_activity": link.get("shares_activity", True),
+            },
+        }
+        if link.get("shares_memory_card"):
+            shared["memory_card"] = kid.get("memory_card") or "Your kid hasn't built a memory with Max yet."
+        if link.get("shares_activity"):
+            shared["messages_today"] = daily
+            shared["messages_last_7_days"] = recent_turns
+        kids.append(shared)
+    return {"kids": kids, "parent_name": user.name}
+
+
+# --- Family co-creation: share ideas, vote on priorities, founding signup ---
+@api_router.post("/family/ideas")
+async def family_share_idea(body: FamilyIdea, user: User = Depends(get_current_user)):
+    _require_parent(user)
+    idea = (body.idea or "").strip()
+    if len(idea) < 10:
+        raise HTTPException(status_code=400, detail="Idea too short (min 10 chars)")
+    await db.family_ideas.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "parent_name": user.name,
+        "parent_email": user.email,
+        "idea": idea[:1000],
+        "category": body.category,
+        "upvotes": 0,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True}
+
+
+@api_router.get("/family/polls")
+async def family_get_polls(user: User = Depends(get_current_user)):
+    _require_parent(user)
+    my_vote = await db.family_poll_votes.find_one({"user_id": user.user_id}, {"_id": 0})
+    options = []
+    for opt in FEATURE_POLL_OPTIONS:
+        count = await db.family_poll_votes.count_documents({"option_ids": opt["id"]})
+        options.append({**opt, "votes": count})
+    return {
+        "title": "Which feature should we build next?",
+        "subtitle": "Vote for as many as you want. Your pick guides our roadmap.",
+        "options": options,
+        "my_vote": my_vote.get("option_ids", []) if my_vote else [],
+    }
+
+
+@api_router.post("/family/polls/vote")
+async def family_vote_poll(body: PollVote, user: User = Depends(get_current_user)):
+    _require_parent(user)
+    valid_ids = {o["id"] for o in FEATURE_POLL_OPTIONS}
+    picks = [x for x in body.option_ids if x in valid_ids][:10]
+    await db.family_poll_votes.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"user_id": user.user_id, "option_ids": picks, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/family/founding-status")
+async def family_founding_status(user: User = Depends(get_current_user)):
+    count = await db.family_founding_signups.count_documents({})
+    mine = await db.family_founding_signups.find_one({"user_id": user.user_id}, {"_id": 0})
+    return {
+        "signed_up": bool(mine),
+        "signup": mine,
+        "total_signups": count,
+        "cap": FOUNDING_PARENT_CAP,
+        "spots_left": max(0, FOUNDING_PARENT_CAP - count),
+        "founding_price": FOUNDING_PARENT_PRICE,
+        "launch_price": FAMILY_PLAN_LAUNCH_PRICE,
+    }
+
+
+@api_router.post("/family/founding-signup")
+async def family_founding_signup(body: FoundingParentSignup, user: User = Depends(get_current_user)):
+    _require_parent(user)
+    if not body.agrees_to_founding_terms:
+        raise HTTPException(status_code=400, detail="Must agree to founding terms")
+    count = await db.family_founding_signups.count_documents({})
+    existing = await db.family_founding_signups.find_one({"user_id": user.user_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already on the waitlist")
+    slot = count + 1
+    await db.family_founding_signups.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "slot_number": slot,
+        "price_locked": FOUNDING_PARENT_PRICE,
+        "within_cap": slot <= FOUNDING_PARENT_CAP,
+        "signed_up_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "slot_number": slot, "within_cap": slot <= FOUNDING_PARENT_CAP, "price_locked": FOUNDING_PARENT_PRICE}
+
+
+# --- Admin: review family ideas, poll results, founding waitlist ---
+@api_router.get("/admin/family/ideas")
+async def admin_family_ideas(_: bool = Depends(require_admin)):
+    items = await db.family_ideas.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"ideas": items}
+
+
+@api_router.get("/admin/family/polls")
+async def admin_family_polls(_: bool = Depends(require_admin)):
+    options = []
+    for opt in FEATURE_POLL_OPTIONS:
+        count = await db.family_poll_votes.count_documents({"option_ids": opt["id"]})
+        options.append({**opt, "votes": count})
+    total_voters = await db.family_poll_votes.count_documents({})
+    return {"options": sorted(options, key=lambda x: -x["votes"]), "total_voters": total_voters}
+
+
+@api_router.get("/admin/family/founding")
+async def admin_family_founding(_: bool = Depends(require_admin)):
+    items = await db.family_founding_signups.find({}, {"_id": 0}).sort("slot_number", 1).to_list(500)
+    return {"signups": items, "cap": FOUNDING_PARENT_CAP}
 
 
 # -----------------------------

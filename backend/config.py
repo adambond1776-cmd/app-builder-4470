@@ -24,7 +24,21 @@ CURRENT_ROUND_SPONSOR_URL = None
 PITCH_TEXT_MAX_CHARS = 1800  # ~3 paragraphs
 UPVOTE_RATE_LIMIT_PER_IP_PER_DAY = 30  # anti-spam; anonymous votes capped per IP per day
 
+# --- Family OS ---
+FAMILY_PLAN_LAUNCH_PRICE = 29  # dollars/month at full launch
+FOUNDING_PARENT_PRICE = 14.50  # 50% off, locked for 1 year
+FOUNDING_PARENT_CAP = 100  # first 100 parents get the founding rate
+INVITE_CODE_EXPIRY_HOURS = 48
+FEATURE_POLL_OPTIONS = [
+    {"id": "coach_parent", "label": "AI coach for parents (like Max, tuned for you)"},
+    {"id": "family_meeting", "label": "Weekly family meeting assistant"},
+    {"id": "progress_reports", "label": "Monthly progress reports by email"},
+    {"id": "sibling_link", "label": "Link siblings to see each other's shared progress"},
+    {"id": "goal_tracker", "label": "Shared family goal tracker"},
+]
+
 # --- Feature flags ---
 ENABLE_DOCUMENTARY_INTEREST = True
 ENABLE_FOUNDING_20_APPLICATIONS = True
 ENABLE_MAX_PITCH = True
+ENABLE_FAMILY_OS = True

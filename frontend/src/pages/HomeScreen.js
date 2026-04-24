@@ -9,7 +9,7 @@ const BURNERS = [
   { label: "Self", color: "hsl(270,80%,65%)" },
 ];
 
-export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onOpenMaxPitch, onLogout }) {
+export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onOpenMaxPitch, onOpenKidAcceptInvite, onLogout }) {
   const [f20, setF20] = useState(null);
 
   useEffect(() => {
@@ -93,6 +93,16 @@ export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenB
           Submit a pitch, rally upvotes, get matched with a senior exec for a 90-day coaching sprint.
         </div>
       </motion.button>
+
+      {/* Parent invite entry */}
+      {onOpenKidAcceptInvite && (
+        <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} onClick={onOpenKidAcceptInvite} data-testid="home-link-parent-cta" className="text-left mt-3 p-4 rounded-2xl" style={{ background: "hsl(220,35%,11%)", border: "1px dashed hsl(220,30%,22%)" }}>
+          <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(25,100%,65%)" }}>👨‍👩‍👧 Got a parent invite code?</div>
+          <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,60%)" }}>
+            Link your parent so they can support your progress — you pick what they see.
+          </div>
+        </motion.button>
+      )}
 
       <div className="text-center text-[10px] mt-8 mb-4" style={{ color: "hsl(220,15%,35%)" }}>
         Phase 1A · Beta · Part of Hidden Genius Labs LLC

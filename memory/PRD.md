@@ -66,3 +66,28 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - Home screen CTA card to Max Pitch for authed users
 
 **Why this matters:** This is the primary sponsor-attraction surface. "Intro.co powered Round 3 of Max Pitch" or "Sponsored coaching delivered to 12 kids this quarter" is concrete, measurable, and TV-friendly.
+
+## April 24 — Family OS Lite v0 shipped
+
+**What shipped:**
+- Role fork at signup (kid / parent) — existing users default to `kid`
+- Parent onboarding + 6-digit invite code (48hr expiry)
+- Kid-side invite acceptance with granular privacy toggles (memory / burners / activity)
+- Parent Family Dashboard showing linked kids with only what kids chose to share
+- **Roadmap Polls** — parents vote on upcoming features (AI coach for parents, Family Meeting assistant, Monthly reports, Sibling linking, Family goal tracker). Real-time results visible.
+- **Share an Idea** — parents submit categorized feature ideas; Adam reviews via admin endpoint
+- **Founding Parent waitlist** — first 100 parents lock in $14.50/mo (50% off $29 launch). No payment yet — intent capture only.
+- Raw chat content NEVER shared with parent — enforced at API layer
+- Admin endpoints for ideas/polls/founding review
+- Configurable via `config.py`: launch price, founding price, founding cap, poll options
+
+**Architecture notes (stepping-stone protocols):**
+- All family endpoints under `/api/family/*` prefix — future service boundary ready
+- 6 separate Mongo collections: `family_invitations`, `family_links`, `family_ideas`, `family_poll_votes`, `family_founding_signups` (+ `role` field on users)
+- Parent access to kid data always goes through permission check — parent cannot query kid data directly
+- Kid can unlink anytime → parent loses all access immediately
+- Splitting into standalone Family OS app in future = migrate 6 collections + move `/family/*` routes to new service
+
+**Deferred to v1:** Parent AI coach, weekly family meeting assistant, Family Burners framework, multi-parent support, Stripe integration (Family Plan real payment), public idea voting (kids can upvote parent ideas), maxcoach.mom domain routing.
+
+**Business model cemented:** Free tier for kids (organic growth). Parents pay Family Plan at $29/mo (or founding $14.50). Aligns incentives, recurring revenue, natural upgrade path.
