@@ -9,7 +9,7 @@ const BURNERS = [
   { label: "Self", color: "hsl(270,80%,65%)" },
 ];
 
-export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onOpenMaxPitch, onOpenKidAcceptInvite, onLogout }) {
+export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding, onOpenMaxPitch, onOpenKidAcceptInvite, onOpenMiles, onLogout }) {
   const [f20, setF20] = useState(null);
 
   useEffect(() => {
@@ -93,6 +93,22 @@ export default function HomeScreen({ user, onContinueChat, onOpenMemory, onOpenB
           Submit a pitch, rally upvotes, get matched with a senior exec for a 90-day coaching sprint.
         </div>
       </motion.button>
+
+      {/* Miles Academy entry */}
+      {onOpenMiles && (
+        <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} onClick={onOpenMiles} data-testid="home-miles-cta" className="text-left mt-3 p-4 rounded-2xl relative overflow-hidden" style={{ background: "linear-gradient(135deg, hsla(160,70%,45%,0.14), hsla(35,100%,60%,0.06))", border: "1px solid hsla(160,70%,50%,0.35)" }}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "hsl(160,70%,65%)" }}>📚 Miles Academy</span>
+            {user.miles_persona && <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "hsla(160,70%,45%,0.15)", color: "hsl(160,70%,72%)", border: "1px solid hsla(160,70%,45%,0.3)" }}>Coach: {user.miles_persona.charAt(0).toUpperCase() + user.miles_persona.slice(1)}</span>}
+          </div>
+          <div className="text-sm font-bold mb-1" style={{ color: "hsl(210,20%,92%)" }}>
+            {user.miles_persona ? "Continue your academic track →" : "Need an edge in a subject? →"}
+          </div>
+          <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,60%)" }}>
+            Math, writing, SAT/AP, college apps, any subject school isn't getting you through. Pick from three coaches.
+          </div>
+        </motion.button>
+      )}
 
       {/* Parent invite entry */}
       {onOpenKidAcceptInvite && (

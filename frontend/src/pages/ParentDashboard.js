@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
 
-export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite, onOpenMaya }) {
+export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite, onOpenMaya, onOpenMiles }) {
   const [dashboard, setDashboard] = useState(null);
   const [founding, setFounding] = useState(null);
 
@@ -62,6 +62,46 @@ export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIde
           30 free messages/day · Founding Parents unlock unlimited
         </div>
       </motion.button>
+
+      {/* Miles Academy — academic edge / homeschool / tutor supplement */}
+      {onOpenMiles && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={onOpenMiles}
+          data-testid="parent-miles-cta"
+          className="text-left mb-5 p-4 rounded-2xl"
+          style={{
+            background: "linear-gradient(135deg, hsla(160,70%,45%,0.12), hsla(35,100%,60%,0.05))",
+            border: "1px solid hsla(160,70%,50%,0.3)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "hsl(160,70%,65%)" }}>
+              📚 Miles Academy
+            </span>
+            {user.miles_persona && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full"
+                style={{
+                  background: "hsla(160,70%,45%,0.15)",
+                  color: "hsl(160,70%,72%)",
+                  border: "1px solid hsla(160,70%,45%,0.3)",
+                }}
+              >
+                Coach: {user.miles_persona.charAt(0).toUpperCase() + user.miles_persona.slice(1)}
+              </span>
+            )}
+          </div>
+          <div className="font-bold text-sm" style={{ color: "hsl(210,20%,92%)" }}>
+            {user.miles_persona ? "Continue in the Academy →" : "Homeschool or tutor supplement →"}
+          </div>
+          <div className="text-xs mt-1" style={{ color: "hsl(220,15%,58%)" }}>
+            An academic-edge coach for your kid — or for you orchestrating their curriculum. Three coaches, all subjects.
+          </div>
+        </motion.button>
+      )}
 
       {/* Invite card or kid cards */}
       {!dashboard?.kids?.length ? (

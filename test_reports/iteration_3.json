@@ -1,0 +1,32 @@
+{
+  "summary": "Miles Academy (new persona-based academic coach) end-to-end validation PASSED. 35/35 new Miles backend tests + 35/35 Max+Maya regression = 70/70 green. Frontend flows verified via Playwright on deployed URL with pre-seeded parent account: parent-miles-cta opens miles-intro-screen with 3 persona cards (ivy/vance/drake) + documentary opt-in (yes/maybe/no), continue disabled until persona picked; submitting persona routes to miles-chat-screen with correct persona-themed avatar/color (Vance=amber verified), 30/30 chip, subject dropdown (miles-subject-math works), live Claude reply decrements chip to 29/30, miles-back-btn returns to parent dashboard. Upgrade wall (miles_daily_count=30) renders miles-upgrade-wall with miles-upgrade-founding-btn → miles-founding-screen shows $9.5/mo + first 50 families + agree checkbox + lock btn → successful signup shows 'You're Founding Miles #1'. Counter isolation confirmed: sending miles chat does NOT mutate daily_count or parent_daily_count; sending family chat does NOT mutate miles_daily_count. Parent test account fully reset post-tests per main agent spec.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_miles_academy.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/miles_results.xml",
+    "/app/test_reports/pytest/regression_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1907 lines (up from 1389) — adding Miles on top of Max + Maya keeps compounding the single-file maintainability risk flagged in iterations 1 & 2. Split into routers/ (max_router.py, maya_router.py, miles_router.py, admin_router.py) + services/ (memory.py) + prompts/ is increasingly urgent before next feature lands.",
+    "MILES_PERSONAS dict bakes the full system prompts (600+ chars each) directly into server.py next to routes. Move to /app/backend/prompts/miles_personas.py to keep the module skimmable.",
+    "Miles memory summarization runs synchronously in the chat request (same pattern as Maya). A 6th-message user sees ~1-2s extra latency from the Haiku call. Consider FastAPI BackgroundTask once latency matters.",
+    "Three daily counters now live on the User model (daily_count / parent_daily_count / miles_daily_count) with parallel *_date and *_exchange_count_since_summary fields. This triplicate field explosion is a refactor candidate — a nested {tracks: {max:{...}, maya:{...}, miles:{...}}} sub-document would DRY it cleanly.",
+    "/api/miles/founding-signup allows signup even BEFORE the user picks a persona (only onboarding+auth checks). Probably intentional (waitlist is brand-level, not persona-level) but worth a product decision.",
+    "CORS allow_origins='*' with allow_credentials=True still present — same flag as iteration_1 & 2.",
+    "Miles nudge banner for final_five correctly includes '$9.50' / 'founding' copy per spec — but nudge wording is injected via system-prompt hint AND returned as a deterministic `nudge` field in the response. Frontend reads the deterministic field — good; just document that the LLM-appended line is best-effort."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (extended _seed_user with miles_* kwargs + miles_* collection teardown)",
+    "/app/backend/tests/test_miles_academy.py (new — 35 tests)"
+  ],
+  "success_rate": { "backend": "100% (70/70: 35 Miles + 17 Max + 18 Maya)", "frontend": "100% (intro, chat send, subject picker, back, upgrade wall, founding signup)" },
+  "test_credentials": "PARENT_SESSION_TOKEN=test_parent_1777042439177 (user_id=user_dz3o51yo4yk) for frontend Playwright. Backend pytest seeds ephemeral TEST_user_* with role='parent' + miles_persona preset per test. Admin header X-Admin-Token=adm_1771f205fb49b1910a7172bc4f532d16 for /api/admin/miles/* endpoints. All TEST_ data torn down per-test; real parent account reset (miles_* + parent_* + logs purged) at end.",
+  "seed_data_creation": "For memory-auto-summary test: inserted 5 prior miles_chat_logs + miles_exchange_count_since_summary=5 so only 1 real Claude Haiku call fires (vs 6). Limit-state tests pre-load miles_daily_count to 21/27/30 to hit approaching/final_five/exhausted buckets with a single Claude call each. Total real Claude calls this iteration: ~8 (happy path + 2 limit-state Sonnet + 1 Haiku summary + UI send + 3 for persona swap/subject branches).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Miles regression suite lives at /app/backend/tests/test_miles_academy.py — run alongside test_max_coach_api.py and test_maya_parent_chat.py. conftest.py now supports miles_persona, miles_daily_count, miles_daily_count_date, miles_memory_card, miles_exchange_count, miles_documentary_interest, miles_onboarded_at kwargs on seed_user. Parent test user: user_dz3o51yo4yk / session_token=test_parent_1777042439177. Collections used: miles_chat_logs, miles_ideas, miles_poll_votes, miles_founding_signups. Admin token in /app/memory/ADMIN.md. All data-testids in problem statement exist and are wired: parent-miles-cta, miles-intro-screen, miles-persona-card-{ivy,vance,drake}, miles-doc-{yes,maybe,no}, miles-intro-continue-btn, miles-chat-screen, miles-remaining-chip, miles-subject-btn, miles-subject-{math,...}, miles-input, miles-send-btn, miles-back-btn, miles-upgrade-wall, miles-upgrade-founding-btn, miles-founding-screen, miles-founding-agree-checkbox, miles-founding-lock-btn.",
+  "rca of the issue": "N/A — zero defects. Miles backend contract (config, me, persona pick, chat with limit-state transitions 30→20 normal, ≤10 approaching, ≤5 final_five with $9.50 founding nudge, 0 → 429), memory-card auto-build at 6th exchange (Haiku), ideas + polls + founding signup all pass. Counter isolation between Max (kid), Maya (parent), Miles verified both directions. Frontend persona theming + subject-aware chat + upgrade wall + founding slot lock all render and persist correctly."
+}

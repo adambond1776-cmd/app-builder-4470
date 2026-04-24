@@ -27,6 +27,11 @@ from config import (
     PARENT_SUMMARY_MAX_TOKENS, PARENT_SUMMARY_EVERY_N_EXCHANGES,
     PARENT_RAW_HISTORY_KEEP, PARENT_DAILY_MESSAGE_CAP,
     PARENT_NUDGE_APPROACHING, PARENT_NUDGE_FINAL,
+    MILES_BRAND_NAME, MILES_BRAND_SHORT, MILES_CHAT_MODEL, MILES_SUMMARY_MODEL,
+    MILES_MAX_REPLY_TOKENS, MILES_SUMMARY_MAX_TOKENS, MILES_SUMMARY_EVERY_N_EXCHANGES,
+    MILES_RAW_HISTORY_KEEP, MILES_DAILY_MESSAGE_CAP, MILES_NUDGE_APPROACHING, MILES_NUDGE_FINAL,
+    MILES_FOUNDING_PRICE, MILES_LAUNCH_PRICE, MILES_FOUNDING_CAP,
+    MILES_VALID_PERSONAS, MILES_VALID_SUBJECTS, MILES_FEATURE_POLL_OPTIONS,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -103,6 +108,14 @@ class User(BaseModel):
     parent_exchange_count_since_summary: int = 0
     parent_daily_count: int = 0
     parent_daily_count_date: Optional[str] = None
+    # Miles Academy — academic-edge coach; also fully independent counters
+    miles_persona: Optional[Literal["ivy", "vance", "drake"]] = None
+    miles_memory_card: Optional[str] = None
+    miles_exchange_count_since_summary: int = 0
+    miles_daily_count: int = 0
+    miles_daily_count_date: Optional[str] = None
+    miles_documentary_interest: Optional[Literal["yes", "maybe", "no"]] = None
+    miles_onboarded_at: Optional[str] = None
     founding_20_applied: bool = False
     created_at: datetime
 
@@ -1360,6 +1373,510 @@ async def admin_family_polls(_: bool = Depends(require_admin)):
 async def admin_family_founding(_: bool = Depends(require_admin)):
     items = await db.family_founding_signups.find({}, {"_id": 0}).sort("slot_number", 1).to_list(500)
     return {"signups": items, "cap": FOUNDING_PARENT_CAP}
+
+
+# =============================================================================
+# Miles Academy — academic-edge / homeschool / tutor-supplement vertical
+# Accessible from both Kid (Max) and Parent (Maya) contexts.
+# Brand name is injected from config (MILES_BRAND_NAME) so rename is a 1-line swap.
+# =============================================================================
+
+_MILES_RULES_BLOCK = f"""VOICE FLOOR RULES (apply to every persona):
+- You are part of {MILES_BRAND_NAME}, the academic-edge companion to The Business of Life by Adam Bond Devereau.
+- Max (kid life coach) and Maya (parent coach) are siblings to you. When relevant, reference them — you do not replace them; you teach alongside them.
+- You coach kids (and the parents guiding them) through ACADEMIC subjects: math, writing, reading, science, history, languages, test prep, college applications, general study skills.
+- You never do the work FOR the student. You teach the underlying pattern, then ask them to apply it. Homework-cheating detectors are not your enemy; learning is.
+- If a student pastes an assignment and asks you to solve it, you solve ONE example, explain the pattern, then give them the next one to try themselves.
+- BANNED PHRASES: "That's a great question", "It's important that...", "It's crucial that...", "I understand how you feel", "You should consider...". Never start a response with "I".
+- Max 5 sentences in any response. Mobile-first.
+- End every response with ONE sharp question that moves learning forward — either a next-step prompt, a concept check, or a metacognitive nudge ("which part of this felt fuzzy?").
+- No bullet points unless the student explicitly asks for steps or a list.
+- If a student shares distress that's bigger than academics (hopelessness, harm, crisis), stop academic coaching immediately and say: "That sounds bigger than homework. Got a trusted adult — parent, counselor, or coach — you can talk to right now? You don't have to figure that part alone." Then follow their lead.
+
+FRAMEWORK — THE FOUR {MILES_BRAND_SHORT.upper()} BURNERS:
+1. MASTERY — depth in the subject itself. Don't ship surface-level tricks.
+2. MOTIVATION — connect today's work to a future the student actually wants.
+3. METHOD — study habits, spaced repetition, active recall, schedule discipline.
+4. MINDSET — identity and confidence. A student who thinks "I'm bad at math" will stay bad at math until that sentence dies.
+
+Rotate focus based on what the student brings. Keep a baseline under each."""
+
+
+MILES_PERSONAS = {
+    "ivy": {
+        "display_name": "Ivy",
+        "tagline": "The patient tutor — warm, encouraging, never makes you feel dumb.",
+        "sample_line": "Okay — take a breath. This is a tough one, and the fact that you're here working on it already means you're doing more than most. Let's look at what you've got so far and find the one piece that's missing.",
+        "prompt": f"""You are IVY — a warm, patient, encouraging academic tutor. Feminine, soothing, steady. The best teacher a student ever had, the kind of voice that makes a kid who thinks they're "bad at math" realize they were just under-coached.
+
+{_MILES_RULES_BLOCK}
+
+IVY-SPECIFIC VOICE:
+- Lead with warmth. Acknowledge effort before correcting an answer.
+- Celebrate small wins genuinely — "That step right there? That's the hard part, and you nailed it."
+- When a student is frustrated or anxious, slow down. Name the feeling in one sentence, THEN teach.
+- Use gentle, inviting language: "Let's try this together." "What do you notice about this one?" "Walk me through what you were thinking."
+- Never condescend. Never use fake-cheerful filler. Warmth is not the same as softness on the material — you still teach rigor, just without shame.""",
+    },
+    "vance": {
+        "display_name": "Vance",
+        "tagline": "The motivator — inspirational, vision-casting, turns homework into a mission.",
+        "sample_line": "Hey. The reason this feels hard isn't because you're dumb — it's because nobody showed you *why* it matters yet. You crack this one subject and suddenly three doors open you didn't even know were doors. Let's go.",
+        "prompt": f"""You are VANCE — a motivational, inspirational academic coach. Hype with substance. You turn a worksheet into a mission and a struggling student into someone who remembers why they started.
+
+{_MILES_RULES_BLOCK}
+
+VANCE-SPECIFIC VOICE:
+- Open energy. You treat every session like you actually believe this student is going somewhere — because you do.
+- Always tie today's work to a future the student has mentioned wanting. If they haven't, draw it out: "What's this class unlocking for you — college, a career, a bet you made with yourself?"
+- Reframe "I can't" into "I haven't yet." Without being corny.
+- Name the stakes without fear-mongering. "This essay is not the whole college app, but your discipline this week is the muscle you'll use for all of it."
+- When a student wins, mark it loud. When they lose, you stay in the ring with them — no pity.""",
+    },
+    "drake": {
+        "display_name": "Drake",
+        "tagline": "The rigorous coach — structured, high-standards, hard truths with real warmth.",
+        "sample_line": "You're behind schedule and both of us know it. Here's the good news — behind is a fact, not a verdict. We're going to fix the schedule tonight, do the next two problems right now, and I'm going to hold you to it because I know you can hit it.",
+        "prompt": f"""You are DRAKE — a structured, high-standards, rigorous academic coach. Hard truths delivered with real warmth. You run tight practice loops, insist on depth, and tell students what their teachers often won't.
+
+{_MILES_RULES_BLOCK}
+
+DRAKE-SPECIFIC VOICE:
+- Direct. No sugarcoating, no fake praise. If a student's answer is wrong, say it's wrong and then teach the correct pattern.
+- Set structure. Propose tight study loops (20-min focused blocks, active recall, spaced review). Name deadlines explicitly.
+- When a student makes an excuse, name the pattern, not the person: "That's the same move as last time — what changes tonight?"
+- Warmth lives in your belief in them, NOT in soft words. "You're better than this answer, and we both know it" is a Drake line.
+- Always end a session with a concrete micro-commitment: "What are you doing in the next 30 minutes to make today real?" """,
+    },
+}
+
+
+class MilesPersonaPick(BaseModel):
+    persona: Literal["ivy", "vance", "drake"]
+    documentary_interest: Optional[Literal["yes", "maybe", "no"]] = None
+
+
+class MilesChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    subject: Optional[str] = None  # one of MILES_VALID_SUBJECTS
+
+
+class MilesChatResponse(BaseModel):
+    message: str
+    remaining_today: int
+    miles_memory_card: Optional[str] = None
+    limit_state: Literal["normal", "approaching", "final_five", "exhausted"] = "normal"
+    nudge: Optional[str] = None
+    persona: str
+
+
+class MilesMemoryUpdate(BaseModel):
+    miles_memory_card: str
+
+
+class MilesIdea(BaseModel):
+    idea: str
+    category: Literal["subject", "format", "tutor", "homeschool", "other"]
+
+
+class MilesPollVote(BaseModel):
+    option_ids: List[str]
+
+
+class MilesFoundingSignup(BaseModel):
+    agrees_to_founding_terms: bool
+
+
+class MilesDocumentaryUpdate(BaseModel):
+    documentary_interest: Literal["yes", "maybe", "no"]
+
+
+def _subject_hint(subject: Optional[str]) -> str:
+    if not subject or subject == "general" or subject not in MILES_VALID_SUBJECTS:
+        return ""
+    pretty = subject.replace("_", " ").title()
+    return f"\n\nCURRENT SUBJECT FOCUS: {pretty}. Tailor examples, vocabulary, and pedagogy to this subject."
+
+
+async def _build_miles_memory_card(user_id: str, existing: Optional[str], recent_turns: List[dict]) -> str:
+    convo_text = "\n".join([f"{t['role']}: {t['content']}" for t in recent_turns])
+    summary_prompt = (
+        f"You are {MILES_BRAND_SHORT}'s memory engine. Distill what you now know about this learner into a compact academic note. "
+        "Under 5 short lines. Focus on: grade level / age clues, subjects in focus, current strengths and gaps, "
+        "habits and discipline issues, specific goals (exam, admissions, subject mastery), and confidence/mindset signals. "
+        "Plain-English third person, no fluff."
+    )
+    if existing:
+        summary_prompt += f"\n\nPrior memory:\n{existing}\n\nUpdate with new info from these turns:"
+    else:
+        summary_prompt += "\n\nBuild a fresh memory note from these turns:"
+    summary_prompt += f"\n\n{convo_text}"
+
+    summarizer = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"miles-summary-{user_id}-{uuid.uuid4().hex[:6]}",
+        system_message="You write compact academic memory notes. Max 5 short lines. No preamble.",
+    ).with_model("anthropic", MILES_SUMMARY_MODEL).with_params(max_tokens=MILES_SUMMARY_MAX_TOKENS)
+
+    try:
+        new_card = await summarizer.send_message(UserMessage(text=summary_prompt))
+        return new_card.strip()[:2000]
+    except Exception as e:
+        logger.warning(f"Miles memory summarization failed: {e}")
+        return existing or ""
+
+
+@api_router.get("/miles/config")
+async def miles_config():
+    """Public-ish config for UI rendering. No auth needed — used in onboarding copy."""
+    return {
+        "brand_name": MILES_BRAND_NAME,
+        "brand_short": MILES_BRAND_SHORT,
+        "founding_price": MILES_FOUNDING_PRICE,
+        "launch_price": MILES_LAUNCH_PRICE,
+        "founding_cap": MILES_FOUNDING_CAP,
+        "daily_cap": MILES_DAILY_MESSAGE_CAP,
+        "personas": [
+            {"id": p, "display_name": MILES_PERSONAS[p]["display_name"],
+             "tagline": MILES_PERSONAS[p]["tagline"], "sample_line": MILES_PERSONAS[p]["sample_line"]}
+            for p in MILES_VALID_PERSONAS
+        ],
+        "subjects": MILES_VALID_SUBJECTS,
+    }
+
+
+@api_router.get("/miles/me")
+async def miles_me(user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    today = date.today().isoformat()
+    daily_count = user.miles_daily_count if user.miles_daily_count_date == today else 0
+    return {
+        "persona": user.miles_persona,
+        "persona_display_name": MILES_PERSONAS[user.miles_persona]["display_name"] if user.miles_persona else None,
+        "memory_card": user.miles_memory_card,
+        "remaining_today": max(0, MILES_DAILY_MESSAGE_CAP - daily_count),
+        "daily_cap": MILES_DAILY_MESSAGE_CAP,
+        "documentary_interest": user.miles_documentary_interest,
+        "onboarded_at": user.miles_onboarded_at,
+    }
+
+
+@api_router.post("/miles/persona")
+async def miles_set_persona(body: MilesPersonaPick, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    if body.persona not in MILES_VALID_PERSONAS:
+        raise HTTPException(status_code=400, detail="Invalid persona")
+    update = {"miles_persona": body.persona}
+    if user.miles_onboarded_at is None:
+        update["miles_onboarded_at"] = datetime.now(timezone.utc).isoformat()
+    if body.documentary_interest is not None:
+        update["miles_documentary_interest"] = body.documentary_interest
+    await db.users.update_one({"user_id": user.user_id}, {"$set": update})
+    return {
+        "ok": True,
+        "persona": body.persona,
+        "persona_display_name": MILES_PERSONAS[body.persona]["display_name"],
+    }
+
+
+@api_router.patch("/miles/documentary")
+async def miles_update_documentary(body: MilesDocumentaryUpdate, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"miles_documentary_interest": body.documentary_interest}},
+    )
+    return {"ok": True, "documentary_interest": body.documentary_interest}
+
+
+@api_router.post("/miles/chat", response_model=MilesChatResponse)
+async def miles_chat(req: MilesChatRequest, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    if not user.miles_persona:
+        raise HTTPException(status_code=400, detail="Pick a Miles persona first")
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="messages required")
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM not configured")
+
+    today = date.today().isoformat()
+    daily_count = user.miles_daily_count if user.miles_daily_count_date == today else 0
+    if daily_count >= MILES_DAILY_MESSAGE_CAP:
+        raise HTTPException(status_code=429, detail="daily_cap_reached")
+
+    remaining_before = MILES_DAILY_MESSAGE_CAP - daily_count
+    persona = MILES_PERSONAS[user.miles_persona]
+    memory_context = (
+        f"\n\n{persona['display_name'].upper()}'S MEMORY OF THIS LEARNER:\n{user.miles_memory_card}\n\nUse this context naturally; don't robotically repeat it."
+        if user.miles_memory_card else ""
+    )
+    nudge_instruction = ""
+    if remaining_before <= MILES_NUDGE_FINAL:
+        nudge_instruction = (
+            f"\n\nSYSTEM NOTE (not visible to user): This learner has {remaining_before} message(s) left today on the free plan. "
+            f"After your normal answer, add ONE short, matter-of-fact line — in your own voice — mentioning Founding {MILES_BRAND_SHORT} unlocks unlimited sessions at ${MILES_FOUNDING_PRICE}/mo "
+            f"(locked for a year, launches at ${MILES_LAUNCH_PRICE}/mo). Skip this nudge entirely if the user just shared distress or a crisis moment."
+        )
+
+    full_system = persona["prompt"] + _subject_hint(req.subject) + memory_context + nudge_instruction
+
+    last = req.messages[-1]
+    if last.role != "user":
+        raise HTTPException(status_code=400, detail="last message must be user")
+
+    prior = req.messages[:-1][-(MILES_RAW_HISTORY_KEEP * 2):]
+    transcript = ""
+    if prior:
+        lines = [f"{'Learner' if m.role == 'user' else persona['display_name']}: {m.content}" for m in prior]
+        transcript = "\n\nRECENT CONVERSATION:\n" + "\n".join(lines) + "\n\nContinue naturally."
+
+    chat_client = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"miles-chat-{user.user_id}-{uuid.uuid4().hex[:6]}",
+        system_message=full_system + transcript,
+    ).with_model("anthropic", MILES_CHAT_MODEL).with_params(max_tokens=MILES_MAX_REPLY_TOKENS)
+
+    try:
+        reply = await chat_client.send_message(UserMessage(text=last.content))
+    except Exception as e:
+        logger.exception("Miles chat LLM error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    await db.miles_chat_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "persona": user.miles_persona,
+        "subject": req.subject if req.subject in MILES_VALID_SUBJECTS else None,
+        "user": last.content,
+        "assistant": reply,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+    new_exchange = user.miles_exchange_count_since_summary + 1
+    new_daily = daily_count + 1
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {
+            "miles_daily_count": new_daily,
+            "miles_daily_count_date": today,
+            "miles_exchange_count_since_summary": new_exchange,
+        }},
+    )
+
+    updated_memory = user.miles_memory_card
+    if new_exchange >= MILES_SUMMARY_EVERY_N_EXCHANGES:
+        recent_docs = await db.miles_chat_logs.find(
+            {"user_id": user.user_id}, {"_id": 0, "user": 1, "assistant": 1}
+        ).sort("timestamp", -1).limit(MILES_SUMMARY_EVERY_N_EXCHANGES).to_list(MILES_SUMMARY_EVERY_N_EXCHANGES)
+        recent_turns = []
+        for d in reversed(recent_docs):
+            recent_turns.append({"role": "user", "content": d["user"]})
+            recent_turns.append({"role": "assistant", "content": d["assistant"]})
+        updated_memory = await _build_miles_memory_card(user.user_id, user.miles_memory_card, recent_turns)
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"miles_memory_card": updated_memory, "miles_exchange_count_since_summary": 0}},
+        )
+
+    remaining_after = max(0, MILES_DAILY_MESSAGE_CAP - new_daily)
+    if remaining_after == 0:
+        limit_state = "exhausted"
+    elif remaining_after <= MILES_NUDGE_FINAL:
+        limit_state = "final_five"
+    elif remaining_after <= MILES_NUDGE_APPROACHING:
+        limit_state = "approaching"
+    else:
+        limit_state = "normal"
+
+    nudge_banner = None
+    if limit_state == "approaching":
+        nudge_banner = f"{remaining_after} messages left today."
+    elif limit_state == "final_five":
+        nudge_banner = f"{remaining_after} left. Founding {MILES_BRAND_SHORT} unlocks unlimited — ${MILES_FOUNDING_PRICE}/mo locked for a year."
+
+    return MilesChatResponse(
+        message=reply,
+        remaining_today=remaining_after,
+        miles_memory_card=updated_memory,
+        limit_state=limit_state,
+        nudge=nudge_banner,
+        persona=user.miles_persona,
+    )
+
+
+@api_router.get("/miles/chat/history")
+async def miles_chat_history(user: User = Depends(get_current_user), limit: int = 40):
+    _require_onboarded(user)
+    limit = max(1, min(200, limit))
+    docs = await db.miles_chat_logs.find(
+        {"user_id": user.user_id}, {"_id": 0, "user": 1, "assistant": 1, "timestamp": 1, "subject": 1}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    turns = []
+    for d in reversed(docs):
+        turns.append({"role": "user", "content": d["user"], "timestamp": d.get("timestamp"), "subject": d.get("subject")})
+        turns.append({"role": "assistant", "content": d["assistant"], "timestamp": d.get("timestamp"), "subject": d.get("subject")})
+    today = date.today().isoformat()
+    daily_count = user.miles_daily_count if user.miles_daily_count_date == today else 0
+    return {
+        "messages": turns,
+        "remaining_today": max(0, MILES_DAILY_MESSAGE_CAP - daily_count),
+        "daily_cap": MILES_DAILY_MESSAGE_CAP,
+    }
+
+
+@api_router.get("/miles/memory")
+async def miles_get_memory(user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    return {"miles_memory_card": user.miles_memory_card or ""}
+
+
+@api_router.put("/miles/memory")
+async def miles_update_memory(upd: MilesMemoryUpdate, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"miles_memory_card": upd.miles_memory_card[:2000], "miles_exchange_count_since_summary": 0}},
+    )
+    return {"ok": True, "miles_memory_card": upd.miles_memory_card[:2000]}
+
+
+@api_router.delete("/miles/memory")
+async def miles_reset_memory(user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"miles_memory_card": None, "miles_exchange_count_since_summary": 0}},
+    )
+    return {"ok": True}
+
+
+# --- Miles co-creation: ideas, polls, founding waitlist ---
+@api_router.post("/miles/ideas")
+async def miles_share_idea(body: MilesIdea, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    idea = (body.idea or "").strip()
+    if len(idea) < 10:
+        raise HTTPException(status_code=400, detail="Idea too short (min 10 chars)")
+    await db.miles_ideas.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "idea": idea[:1500],
+        "category": body.category,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True}
+
+
+@api_router.get("/miles/polls")
+async def miles_get_polls(user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    my_vote = await db.miles_poll_votes.find_one({"user_id": user.user_id}, {"_id": 0})
+    options = []
+    for opt in MILES_FEATURE_POLL_OPTIONS:
+        count = await db.miles_poll_votes.count_documents({"option_ids": opt["id"]})
+        options.append({**opt, "votes": count})
+    return {
+        "title": f"Help shape {MILES_BRAND_NAME}",
+        "subtitle": "Vote for what we build next. Founding members' picks go to the top of the roadmap.",
+        "options": options,
+        "my_vote": my_vote.get("option_ids", []) if my_vote else [],
+    }
+
+
+@api_router.post("/miles/polls/vote")
+async def miles_vote_poll(body: MilesPollVote, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    valid_ids = {o["id"] for o in MILES_FEATURE_POLL_OPTIONS}
+    picks = [x for x in body.option_ids if x in valid_ids][:10]
+    await db.miles_poll_votes.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"user_id": user.user_id, "option_ids": picks, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/miles/founding-status")
+async def miles_founding_status(user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    count = await db.miles_founding_signups.count_documents({})
+    mine = await db.miles_founding_signups.find_one({"user_id": user.user_id}, {"_id": 0})
+    return {
+        "signed_up": bool(mine),
+        "signup": mine,
+        "total_signups": count,
+        "cap": MILES_FOUNDING_CAP,
+        "spots_left": max(0, MILES_FOUNDING_CAP - count),
+        "founding_price": MILES_FOUNDING_PRICE,
+        "launch_price": MILES_LAUNCH_PRICE,
+        "brand_name": MILES_BRAND_NAME,
+        "brand_short": MILES_BRAND_SHORT,
+    }
+
+
+@api_router.post("/miles/founding-signup")
+async def miles_founding_signup(body: MilesFoundingSignup, user: User = Depends(get_current_user)):
+    _require_onboarded(user)
+    if not body.agrees_to_founding_terms:
+        raise HTTPException(status_code=400, detail="Must agree to founding terms")
+    existing = await db.miles_founding_signups.find_one({"user_id": user.user_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already on the waitlist")
+    count = await db.miles_founding_signups.count_documents({})
+    slot = count + 1
+    await db.miles_founding_signups.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "slot_number": slot,
+        "price_locked": MILES_FOUNDING_PRICE,
+        "within_cap": slot <= MILES_FOUNDING_CAP,
+        "signed_up_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "slot_number": slot, "within_cap": slot <= MILES_FOUNDING_CAP, "price_locked": MILES_FOUNDING_PRICE}
+
+
+# --- Admin: Miles review endpoints ---
+@api_router.get("/admin/miles/ideas")
+async def admin_miles_ideas(_: bool = Depends(require_admin)):
+    items = await db.miles_ideas.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"ideas": items}
+
+
+@api_router.get("/admin/miles/polls")
+async def admin_miles_polls(_: bool = Depends(require_admin)):
+    options = []
+    for opt in MILES_FEATURE_POLL_OPTIONS:
+        count = await db.miles_poll_votes.count_documents({"option_ids": opt["id"]})
+        options.append({**opt, "votes": count})
+    total_voters = await db.miles_poll_votes.count_documents({})
+    return {"options": sorted(options, key=lambda x: -x["votes"]), "total_voters": total_voters}
+
+
+@api_router.get("/admin/miles/founding")
+async def admin_miles_founding(_: bool = Depends(require_admin)):
+    items = await db.miles_founding_signups.find({}, {"_id": 0}).sort("slot_number", 1).to_list(500)
+    return {"signups": items, "cap": MILES_FOUNDING_CAP, "founding_price": MILES_FOUNDING_PRICE}
+
+
+@api_router.get("/admin/miles/documentary-interest")
+async def admin_miles_documentary(_: bool = Depends(require_admin)):
+    """Documentary-interested Miles users — reality-show candidate pool."""
+    cursor = db.users.find(
+        {"miles_documentary_interest": {"$in": ["yes", "maybe"]}},
+        {"_id": 0, "user_id": 1, "email": 1, "name": 1, "role": 1, "miles_documentary_interest": 1,
+         "miles_persona": 1, "miles_onboarded_at": 1},
+    )
+    users = await cursor.to_list(2000)
+    yes_count = sum(1 for u in users if u.get("miles_documentary_interest") == "yes")
+    maybe_count = sum(1 for u in users if u.get("miles_documentary_interest") == "maybe")
+    return {"users": users, "total": len(users), "yes_count": yes_count, "maybe_count": maybe_count}
 
 
 # -----------------------------

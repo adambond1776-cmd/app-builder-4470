@@ -30,7 +30,7 @@ def mongo():
     c.close()
 
 
-def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, daily_count_date=None, memory_card=None, exchange_count=0, founding_20_applied=False, role="kid", parent_daily_count=0, parent_daily_count_date=None, parent_memory_card=None, parent_exchange_count=0):
+def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, daily_count_date=None, memory_card=None, exchange_count=0, founding_20_applied=False, role="kid", parent_daily_count=0, parent_daily_count_date=None, parent_memory_card=None, parent_exchange_count=0, miles_persona=None, miles_daily_count=0, miles_daily_count_date=None, miles_memory_card=None, miles_exchange_count=0, miles_documentary_interest=None, miles_onboarded_at=None):
     suffix = f"{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
     user_id = f"TEST_user_{suffix}"
     token = f"TEST_sess_{suffix}"
@@ -52,6 +52,13 @@ def _seed_user(mongo, *, age_confirmed=True, beta_consent=True, daily_count=0, d
         "parent_exchange_count_since_summary": parent_exchange_count,
         "parent_daily_count": parent_daily_count,
         "parent_daily_count_date": parent_daily_count_date,
+        "miles_persona": miles_persona,
+        "miles_memory_card": miles_memory_card,
+        "miles_exchange_count_since_summary": miles_exchange_count,
+        "miles_daily_count": miles_daily_count,
+        "miles_daily_count_date": miles_daily_count_date,
+        "miles_documentary_interest": miles_documentary_interest,
+        "miles_onboarded_at": miles_onboarded_at,
         "founding_20_applied": founding_20_applied,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -80,6 +87,10 @@ def seed_user(mongo):
         mongo.user_sessions.delete_many({"user_id": uid})
         mongo.chat_logs.delete_many({"user_id": uid})
         mongo.parent_chat_logs.delete_many({"user_id": uid})
+        mongo.miles_chat_logs.delete_many({"user_id": uid})
+        mongo.miles_ideas.delete_many({"user_id": uid})
+        mongo.miles_poll_votes.delete_many({"user_id": uid})
+        mongo.miles_founding_signups.delete_many({"user_id": uid})
         mongo.founding_20_applications.delete_many({"user_id": uid})
         mongo.feedback.delete_many({"user_id": uid})
 
