@@ -43,3 +43,9 @@ Port + finish a Max AI life coach PWA for young people (16-23) into an Emergent-
 
 ## Enhancement angle
 The Founding 20 application funnel is the product's revenue wedge — you can charge selected applicants a ticket for the 90-day cohort, generating revenue *before* Stripe booster packs even ship. First applications are already being captured from day one of launch.
+
+## April 24 update — Admin endpoints added
+- `GET /api/admin/stats` (token-protected via `X-Admin-Token` header, stored in backend `.env` as `ADMIN_TOKEN`)
+  - Returns user counts, track breakdown, documentary interest, Founding 20 pipeline (with `revenue_ready_leads`), engagement metrics
+- `GET /api/admin/founding20/export.csv` — CSV dump of all Founding 20 applications for manual outreach / Stripe Payment Link blast
+- Admin token + usage examples stored at `/app/memory/ADMIN.md`

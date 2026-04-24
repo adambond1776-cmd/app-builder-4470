@@ -26,6 +26,7 @@ load_dotenv(ROOT_DIR / ".env")
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -466,6 +467,90 @@ async def feedback(req: FeedbackRequest, user: User = Depends(get_current_user))
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     return {"ok": True}
+
+
+# -----------------------------
+# Admin (token-protected)
+# -----------------------------
+from fastapi.responses import PlainTextResponse
+
+
+def require_admin(x_admin_token: Optional[str] = Header(None)):
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Admin token required")
+    return True
+
+
+@api_router.get("/admin/stats")
+async def admin_stats(_: bool = Depends(require_admin)):
+    users_total = await db.users.count_documents({})
+    age_confirmed = await db.users.count_documents({"age_confirmed": True, "beta_consent": True})
+
+    # Track breakdown
+    by_track = {}
+    async for d in db.users.aggregate([{"$group": {"_id": "$current_track", "count": {"$sum": 1}}}]):
+        key = d["_id"] or "not_picked"
+        by_track[key] = d["count"]
+
+    # Documentary interest breakdown
+    doc_interest = {"yes": 0, "maybe": 0, "no": 0, "not_asked": 0}
+    async for d in db.users.aggregate([{"$group": {"_id": "$documentary_interest", "count": {"$sum": 1}}}]):
+        key = d["_id"] or "not_asked"
+        doc_interest[key] = d["count"]
+
+    # Founding 20
+    f20_total = await db.founding_20_applications.count_documents({})
+    f20_paid_ok = await db.founding_20_applications.count_documents({"payment_preference": "paid_ok"})
+    f20_either = await db.founding_20_applications.count_documents({"payment_preference": "either"})
+    f20_free = await db.founding_20_applications.count_documents({"payment_preference": "free_only"})
+    f20_pending = await db.founding_20_applications.count_documents({"status": "pending"})
+
+    # Chat activity
+    chats_total = await db.chat_logs.count_documents({})
+    feedback_up = await db.feedback.count_documents({"rating": "up"})
+    feedback_down = await db.feedback.count_documents({"rating": "down"})
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "users": {
+            "total": users_total,
+            "fully_onboarded": age_confirmed,
+            "by_track": by_track,
+            "documentary_interest": doc_interest,
+        },
+        "founding_20": {
+            "total_applications": f20_total,
+            "spots_cap": FOUNDING_20_CAP,
+            "pending_review": f20_pending,
+            "paid_ok": f20_paid_ok,
+            "either": f20_either,
+            "free_only": f20_free,
+            "revenue_ready_leads": f20_paid_ok + f20_either,
+        },
+        "engagement": {
+            "total_chat_turns": chats_total,
+            "feedback_positive": feedback_up,
+            "feedback_negative": feedback_down,
+        },
+    }
+
+
+@api_router.get("/admin/founding20/export.csv", response_class=PlainTextResponse)
+async def admin_founding_export(_: bool = Depends(require_admin)):
+    import csv, io
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["submitted_at", "name", "email", "track", "payment_preference", "status", "goal", "why_me"])
+    async for doc in db.founding_20_applications.find({}, {"_id": 0}).sort("submitted_at", 1):
+        writer.writerow([
+            doc.get("submitted_at", ""), doc.get("name", ""), doc.get("email", ""),
+            doc.get("track", ""), doc.get("payment_preference", ""), doc.get("status", ""),
+            (doc.get("goal", "") or "").replace("\n", " "),
+            (doc.get("why_me", "") or "").replace("\n", " "),
+        ])
+    return PlainTextResponse(buf.getvalue(), media_type="text/csv", headers={
+        "Content-Disposition": 'attachment; filename="founding20_applications.csv"'
+    })
 
 
 # -----------------------------
