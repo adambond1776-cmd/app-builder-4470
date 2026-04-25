@@ -396,11 +396,32 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
     if not EMERGENT_KEY:
         raise HTTPException(status_code=500, detail="LLM not configured")
 
-    # Daily cap check — boosters pay the overage
+    # Daily cap check — Family Plan bundle (linked parent) overrides cap; otherwise boosters pay the overage
     today = date.today().isoformat()
     daily_count = user.daily_count if user.daily_count_date == today else 0
     used_booster = False
-    if daily_count >= DAILY_MESSAGE_CAP:
+    family_plan_active = False
+
+    # Family Plan bundle: if this kid is linked to a parent whose family_founding_locked_until is in the future,
+    # the kid gets unlimited Max — no daily cap applies.
+    link = await db.family_links.find_one({"kid_user_id": user.user_id}, {"_id": 0})
+    if link:
+        parent_doc = await db.users.find_one(
+            {"user_id": link["parent_user_id"]},
+            {"_id": 0, "family_founding_locked_until": 1},
+        )
+        locked_until = parent_doc.get("family_founding_locked_until") if parent_doc else None
+        if locked_until:
+            try:
+                lu = datetime.fromisoformat(locked_until)
+                if lu.tzinfo is None:
+                    lu = lu.replace(tzinfo=timezone.utc)
+                if lu > datetime.now(timezone.utc):
+                    family_plan_active = True
+            except Exception:
+                pass
+
+    if not family_plan_active and daily_count >= DAILY_MESSAGE_CAP:
         if user.max_boosters_remaining > 0:
             used_booster = True
         else:
@@ -445,13 +466,16 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
-    # Bump counters (only persist current_track when truthy, never overwrite with empty string)
+    # Bump counters (only persist current_track when truthy, never overwrite with empty string).
+    # If Family Plan is active, we still track exchange_count_since_summary for memory cards
+    # but don't count against the daily cap.
     new_count = user.exchange_count_since_summary + 1
     update_set = {
-        "daily_count": daily_count + 1,
-        "daily_count_date": today,
         "exchange_count_since_summary": new_count,
     }
+    if not family_plan_active:
+        update_set["daily_count"] = daily_count + 1
+        update_set["daily_count_date"] = today
     if used_booster:
         update_set["max_boosters_remaining"] = max(0, user.max_boosters_remaining - 1)
     if track:
@@ -476,7 +500,7 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
 
     return ChatResponse(
         message=reply,
-        remaining_today=max(0, DAILY_MESSAGE_CAP - (daily_count + 1)),
+        remaining_today=9999 if family_plan_active else max(0, DAILY_MESSAGE_CAP - (daily_count + 1)),
         memory_card=updated_memory,
     )
 
@@ -1050,7 +1074,19 @@ async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_u
     today = date.today().isoformat()
     daily_count = user.parent_daily_count if user.parent_daily_count_date == today else 0
     used_booster = False
-    if daily_count >= PARENT_DAILY_MESSAGE_CAP:
+    # Family Plan bundle: parent's own founding_lock unlocks unlimited Maya
+    family_plan_active = False
+    if user.family_founding_locked_until:
+        try:
+            lu = datetime.fromisoformat(user.family_founding_locked_until)
+            if lu.tzinfo is None:
+                lu = lu.replace(tzinfo=timezone.utc)
+            if lu > datetime.now(timezone.utc):
+                family_plan_active = True
+        except Exception:
+            pass
+
+    if not family_plan_active and daily_count >= PARENT_DAILY_MESSAGE_CAP:
         if user.parent_boosters_remaining > 0:
             used_booster = True
         else:
@@ -1108,10 +1144,11 @@ async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_u
     new_exchange = user.parent_exchange_count_since_summary + 1
     new_daily = daily_count + 1
     parent_update = {
-        "parent_daily_count": new_daily,
-        "parent_daily_count_date": today,
         "parent_exchange_count_since_summary": new_exchange,
     }
+    if not family_plan_active:
+        parent_update["parent_daily_count"] = new_daily
+        parent_update["parent_daily_count_date"] = today
     if used_booster:
         parent_update["parent_boosters_remaining"] = max(0, user.parent_boosters_remaining - 1)
     await db.users.update_one(
@@ -1134,7 +1171,7 @@ async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_u
             {"$set": {"parent_memory_card": updated_memory, "parent_exchange_count_since_summary": 0}},
         )
 
-    remaining_after = max(0, PARENT_DAILY_MESSAGE_CAP - new_daily)
+    remaining_after = 9999 if family_plan_active else max(0, PARENT_DAILY_MESSAGE_CAP - new_daily)
     if remaining_after == 0:
         limit_state = "exhausted"
     elif remaining_after <= PARENT_NUDGE_FINAL:

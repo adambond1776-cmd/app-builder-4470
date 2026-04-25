@@ -29,6 +29,7 @@ import GeniusStackPage from "./pages/GeniusStackPage";
 import PitchesHubPage from "./pages/PitchesHubPage";
 import SponsorPage from "./pages/SponsorPage";
 import PaymentReturn from "./pages/PaymentReturn";
+import PricingPage from "./pages/PricingPage";
 import { apiJSON } from "./lib/api";
 import "./App.css";
 
@@ -40,6 +41,7 @@ function parsePath() {
   if (pitchMatch) return { type: "pitch_public", slug: pitchMatch[1] };
   if (pathname === "/pitches") return { type: "pitches_hub" };
   if (pathname === "/sponsor") return { type: "sponsor" };
+  if (pathname === "/pricing") return { type: "pricing" };
   if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");
@@ -112,6 +114,13 @@ export default function App() {
     return (
       <div className="flex flex-col min-h-screen w-full max-w-md mx-auto" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
         <PaymentReturn />
+      </div>
+    );
+  }
+  if (route.type === "pricing") {
+    return (
+      <div className="flex flex-col min-h-screen w-full max-w-2xl mx-auto" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
+        <PricingPage onBack={null} />
       </div>
     );
   }
