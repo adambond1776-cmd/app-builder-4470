@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
 
-export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite, onOpenMaya, onOpenMiles }) {
+export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIdeas, onOpenFounding, onOpenInvite, onOpenMaya, onOpenMiles, onOpenGeniusStack }) {
   const [dashboard, setDashboard] = useState(null);
   const [founding, setFounding] = useState(null);
 
@@ -99,6 +99,32 @@ export default function ParentDashboard({ user, onLogout, onOpenPolls, onOpenIde
           </div>
           <div className="text-xs mt-1" style={{ color: "hsl(220,15%,58%)" }}>
             An academic-edge coach for your kid — or for you orchestrating their curriculum. Three coaches, all subjects.
+          </div>
+        </motion.button>
+      )}
+
+      {/* The Accelerator + Genius Stack — methodology */}
+      {onOpenGeniusStack && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          onClick={onOpenGeniusStack}
+          data-testid="parent-genius-stack-cta"
+          className="text-left mb-5 p-4 rounded-2xl"
+          style={{
+            background: "linear-gradient(135deg, hsla(35,100%,55%,0.1), hsla(160,70%,45%,0.05))",
+            border: "1px solid hsla(35,100%,55%,0.3)",
+          }}
+        >
+          <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(35,100%,68%)" }}>
+            ⚡ The Accelerator + Genius Stack
+          </div>
+          <div className="font-bold text-sm" style={{ color: "hsl(210,20%,92%)" }}>
+            Adam's chunking method — automated by AI →
+          </div>
+          <div className="text-xs mt-1" style={{ color: "hsl(220,15%,58%)" }}>
+            NotebookLM + Obsidian + Gemini. The 30-minute setup that turns volume into signal — for you AND your kid.
           </div>
         </motion.button>
       )}

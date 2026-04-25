@@ -74,7 +74,7 @@ function UpgradeWall({ accent, brandShort, foundingPrice, onFounding, onBack }) 
   );
 }
 
-export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding }) {
+export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding, onOpenGeniusStack }) {
   const accent = PERSONA_ACCENT[persona] || PERSONA_ACCENT.ivy;
   const brandShort = cfg?.brand_short || "Miles";
   const foundingPrice = cfg?.founding_price || 9.5;
@@ -112,13 +112,13 @@ export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding }
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText ?? input).trim();
     if (!text || isLoading || limitState === "exhausted") return;
     const userMsg = { role: "user", content: text };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    setInput("");
+    if (overrideText === undefined) setInput("");
     setIsLoading(true);
     try {
       const payload = messages
@@ -147,6 +147,13 @@ export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const runAccelerator = () => {
+    const subjectLabel = SUBJECT_LABELS[subject] || "this material";
+    sendMessage(
+      `RUN THE ACCELERATOR on ${subjectLabel.toLowerCase()}: I'm going to share what I'm working on next. Apply Adam's chunking methodology — strip the noise, identify the signal chunks, build a rapid mental model, give me one extraction strategy I can run in the next 30 minutes. Then ask me to paste the actual material.`,
+    );
   };
 
   const onKey = (e) => {
@@ -253,7 +260,7 @@ export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding }
         />
       ) : (
         <>
-          {/* Subject chip */}
+          {/* Subject chip + Accelerator action */}
           <div
             className="flex-shrink-0 px-4 py-2 border-b flex items-center gap-2"
             style={{ borderColor: "hsl(220,30%,14%)", background: "hsl(220,35%,10%)" }}
@@ -273,6 +280,36 @@ export default function MilesChatScreen({ cfg, persona, onBack, onOpenFounding }
             >
               {SUBJECT_LABELS[subject] || subject} ▾
             </button>
+            <div className="flex-1" />
+            <button
+              onClick={runAccelerator}
+              disabled={isLoading || limitState === "exhausted"}
+              data-testid="miles-run-accelerator-btn"
+              className="text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 disabled:opacity-50"
+              style={{
+                background: "linear-gradient(135deg, hsl(35,100%,55%), hsl(25,100%,50%))",
+                color: "white",
+                boxShadow: "0 0 12px hsla(35,100%,55%,0.35)",
+              }}
+              title="Apply Adam's chunking method to whatever you're working on"
+            >
+              ⚡ Run the Accelerator
+            </button>
+            {onOpenGeniusStack && (
+              <button
+                onClick={onOpenGeniusStack}
+                data-testid="miles-open-genius-stack-btn"
+                className="text-xs px-2.5 py-1.5 rounded-full font-bold"
+                style={{
+                  background: "hsla(160,70%,45%,0.18)",
+                  color: "hsl(160,70%,72%)",
+                  border: "1px solid hsla(160,70%,45%,0.35)",
+                }}
+                title="The 3-tool AI system that automates the Accelerator"
+              >
+                Genius Stack
+              </button>
+            )}
           </div>
           <AnimatePresence>
             {showSubjects && (
