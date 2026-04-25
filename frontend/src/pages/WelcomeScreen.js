@@ -30,7 +30,8 @@ export default function WelcomeScreen({ onStart, onBack, onOpenBurners }) {
         </motion.div>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="text-lg max-w-xs leading-relaxed" style={{ color: "hsl(220,15%,65%)" }}>
-          Your AI Life Coach. <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">All Four Burners.</span> No Tradeoffs.
+          A life coach. <span style={{ color: "hsl(25,100%,60%)" }} className="font-semibold">All four burners.</span><br />
+          <span style={{ color: "hsl(213,100%,68%)" }} className="font-semibold">Figure it out. Level up.</span> No tradeoffs.
         </motion.p>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="flex gap-3 text-xs font-medium flex-wrap justify-center" style={{ color: "hsl(220,15%,50%)" }}>

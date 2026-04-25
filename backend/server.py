@@ -257,6 +257,26 @@ async def auth_session(request: Request, response: Response, x_session_id: Optio
             "exchange_count_since_summary": 0,
             "daily_count": 0,
             "daily_count_date": None,
+            # Maya (parent coach) fields
+            "parent_memory_card": None,
+            "parent_exchange_count_since_summary": 0,
+            "parent_daily_count": 0,
+            "parent_daily_count_date": None,
+            # Miles Academy fields
+            "miles_persona": None,
+            "miles_memory_card": None,
+            "miles_exchange_count_since_summary": 0,
+            "miles_daily_count": 0,
+            "miles_daily_count_date": None,
+            "miles_documentary_interest": None,
+            "miles_onboarded_at": None,
+            # Stripe / monetization fields
+            "stripe_customer_id": None,
+            "max_boosters_remaining": 0,
+            "parent_boosters_remaining": 0,
+            "miles_boosters_remaining": 0,
+            "family_founding_locked_until": None,
+            "miles_founding_locked_until": None,
             "founding_20_applied": False,
             "created_at": now.isoformat(),
         })
