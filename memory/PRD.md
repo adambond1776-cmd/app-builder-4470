@@ -181,7 +181,39 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 
 **Test coverage:** 22 new Stripe tests + 89 regression = **111/111 green** (`/app/backend/tests/test_stripe_phase1c.py`). All idempotency, auth-gating, booster consumption, and credit logic verified. Frontend Playwright validation of /payment/return states + sponsor tier flows + Lead Partner expansion all pass. 3 optional polish items from the testing agent applied (return inquiry_id from /sponsor/inquire, 404-handling on payment status polling, visible validation banner on tier-buy).
 
-## Backlog / Prioritized Roadmap (as of Apr 24, 2026)
+## April 28 — Aquidneck Island Free Books Landing Page shipped
+
+**What it is:** A clean, modern, mobile-first marketing landing page at `/aquidneck` (also accessible at `/free-books` and `/free`) for Adam's free book giveaway campaign targeting Newport / Middletown / Portsmouth High School students (juniors, seniors 16+) and teachers/staff on Aquidneck Island, RI.
+
+**Sections shipped:**
+- Hero with full-width ocean/coastal photo + teal/blue gradient overlay, headline, subheadline, "FREE for Aquidneck Island" eligibility badge, dual CTAs (Claim → form, Read sample → preview)
+- "What You Get" two-card section: Four Burners Framework + Free Bonus Prompt Level-Up Guide
+- "Look Inside" sample preview: stylized book-cover mock, table of contents, intro excerpt, Four Burners diagram visual
+- "Who This Is For" section: Juniors/Seniors and Teachers/Staff cards + perfect-timing call-out
+- "How It Works" 3-step guide
+- "Reality Project" tease box for Level-Up Reality Project video opt-in
+- Claim form: first_name, email, school dropdown (Newport/Middletown/Portsmouth/Other), role dropdown (Junior/Senior/Teacher), reality-project checkbox
+- Success state: thank-you message + Amazon-review nudge + link back to maxcoach.app
+- Social proof: testimonial quote + 2 video testimonial slots (placeholder for future content)
+- Footer: maxcoach branding + "free community gift from local Rhode Island author" tagline + nav to Pricing/Pitches/Sponsor
+
+**Backend:**
+- `POST /api/aquidneck/claim` — public form capture endpoint with email de-dupe (returns `already_claimed: true` on repeat submissions, no error)
+- `GET /api/admin/aquidneck/signups` — admin token-gated export with totals, by_school breakdown, by_role breakdown, reality_interested count
+- New collection: `aquidneck_book_signups`
+
+**Smoke tests passing:**
+- Page renders, CTA scrolls to form, form submits successfully, success state shows, de-dupe works on repeat email, validation rejects empty first name + invalid email
+- Currently lives at `/aquidneck` as a parallel public route — does NOT replace the `/` homepage flow (kid/parent app stays intact)
+
+**Known to-do items / asks for Adam:**
+- Hero photo is generic coastal stock — swap for real Newport/Pell Bridge/Cliff Walk photo when Adam provides one
+- Book cover is a stylized mock — replace with real cover image when ready
+- Video testimonial slots are placeholders — fill with actual student videos
+- Email-delivery hookup (sending download links) is NOT wired yet — currently captures signup only. Recommend: add Resend or SendGrid integration to auto-send PDF download links on signup
+- Decision pending: should `/aquidneck` become THE `/` homepage of maxcoach.app for unauth visitors?
+
+
 
 **P1 — next up:**
 - Amazon book link for *The Business of Life: Student Edition* (blocked on user providing URL — kid-facing pages)

@@ -30,6 +30,7 @@ import PitchesHubPage from "./pages/PitchesHubPage";
 import SponsorPage from "./pages/SponsorPage";
 import PaymentReturn from "./pages/PaymentReturn";
 import PricingPage from "./pages/PricingPage";
+import AquidneckLanding from "./pages/AquidneckLanding";
 import { apiJSON } from "./lib/api";
 import "./App.css";
 
@@ -42,6 +43,7 @@ function parsePath() {
   if (pathname === "/pitches") return { type: "pitches_hub" };
   if (pathname === "/sponsor") return { type: "sponsor" };
   if (pathname === "/pricing") return { type: "pricing" };
+  if (pathname === "/aquidneck" || pathname === "/free-books" || pathname === "/free") return { type: "aquidneck" };
   if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");
@@ -121,6 +123,13 @@ export default function App() {
     return (
       <div className="flex flex-col min-h-screen w-full max-w-2xl mx-auto" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
         <PricingPage onBack={null} />
+      </div>
+    );
+  }
+  if (route.type === "aquidneck") {
+    return (
+      <div className="min-h-screen w-full" data-testid="app-root">
+        <AquidneckLanding />
       </div>
     );
   }

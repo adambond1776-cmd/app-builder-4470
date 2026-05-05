@@ -2445,6 +2445,69 @@ async def admin_stripe_transactions(_: bool = Depends(require_admin)):
 
 
 # -----------------------------
+# Aquidneck Island Free Books campaign — public landing capture
+# -----------------------------
+class AquidneckClaim(BaseModel):
+    first_name: str
+    email: str
+    school: Literal["newport_high", "middletown_high", "portsmouth_high", "other"]
+    role: Literal["junior", "senior", "teacher_staff"]
+    reality_project_interest: bool = False
+    other_school_name: Optional[str] = None
+
+
+@api_router.post("/aquidneck/claim")
+async def aquidneck_claim(body: AquidneckClaim, request: Request):
+    first_name = (body.first_name or "").strip()[:80]
+    email = (body.email or "").strip().lower()[:200]
+    if not first_name or not email:
+        raise HTTPException(status_code=400, detail="First name and email required")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    # Soft de-dupe: if same email already claimed, return ok with already_claimed flag
+    existing = await db.aquidneck_book_signups.find_one({"email": email}, {"_id": 0})
+    if existing:
+        return {"ok": True, "already_claimed": True, "id": existing["id"]}
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "first_name": first_name,
+        "email": email,
+        "school": body.school,
+        "other_school_name": (body.other_school_name or "").strip()[:120] or None,
+        "role": body.role,
+        "reality_project_interest": bool(body.reality_project_interest),
+        "source_ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", "")[:300] or None,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.aquidneck_book_signups.insert_one(doc)
+    return {"ok": True, "already_claimed": False, "id": doc["id"]}
+
+
+@api_router.get("/admin/aquidneck/signups")
+async def admin_aquidneck_signups(_: bool = Depends(require_admin)):
+    items = await db.aquidneck_book_signups.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    by_school = {}
+    by_role = {}
+    reality_count = 0
+    for it in items:
+        by_school[it["school"]] = by_school.get(it["school"], 0) + 1
+        by_role[it["role"]] = by_role.get(it["role"], 0) + 1
+        if it.get("reality_project_interest"):
+            reality_count += 1
+    return {
+        "signups": items,
+        "total": len(items),
+        "by_school": by_school,
+        "by_role": by_role,
+        "reality_interested": reality_count,
+    }
+
+
+# -----------------------------
 # App setup
 # -----------------------------
 app.include_router(api_router)
