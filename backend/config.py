@@ -22,6 +22,7 @@ CURRENT_ROUND_DEADLINE = "2026-06-01T00:00:00Z"  # ISO format, change anytime
 CURRENT_ROUND_SPONSOR_NAME = None  # e.g. "Powered by Intro.co"
 CURRENT_ROUND_SPONSOR_URL = None
 PITCH_TEXT_MAX_CHARS = 1800  # ~3 paragraphs
+PITCH_ROUND_CAP = 50  # max pitch submissions per round (cost control); after cap, waitlist only
 UPVOTE_RATE_LIMIT_PER_IP_PER_DAY = 30  # anti-spam; anonymous votes capped per IP per day
 
 # --- Family OS ---

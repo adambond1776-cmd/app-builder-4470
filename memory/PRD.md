@@ -181,6 +181,19 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 
 **Test coverage:** 22 new Stripe tests + 89 regression = **111/111 green** (`/app/backend/tests/test_stripe_phase1c.py`). All idempotency, auth-gating, booster consumption, and credit logic verified. Frontend Playwright validation of /payment/return states + sponsor tier flows + Lead Partner expansion all pass. 3 optional polish items from the testing agent applied (return inquiry_id from /sponsor/inquire, 404-handling on payment status polling, visible validation banner on tier-buy).
 
+## May 5 — Max Pitch live with capacity cap + waitlist + new copy
+
+**What shipped:**
+- Per-round submission cap: `PITCH_ROUND_CAP = 50` in `config.py` (cost control — prevents data-fee blowout)
+- `GET /api/pitch/round` now returns `submission_count`, `cap`, `spots_left`, `is_full`
+- `POST /api/pitch/submit` enforces the cap (returns 409 "Round is full" once reached)
+- New `POST /api/pitch/waitlist` public endpoint — captures name/email/optional note, de-dupes by email
+- New `GET /api/admin/pitch/waitlist` admin export
+- New collection: `pitch_waitlist`
+- `MaxPitchSubmit.js` rewritten with new "What this is" copy (90 days 1-on-1 coaching, 5 families get Adam directly + reality-doc featured participation, matchmaking interview), visible capacity meter, auto-swap to waitlist form when `is_full=true`
+- Curl-verified: `/pitch/round` returns correct fields, `/pitch/waitlist` accepts + dedupes + validates
+
+
 ## April 28 — Aquidneck Island Free Books Landing Page shipped
 
 **What it is:** A clean, modern, mobile-first marketing landing page at `/aquidneck` (also accessible at `/free-books` and `/free`) for Adam's free book giveaway campaign targeting Newport / Middletown / Portsmouth High School students (juniors, seniors 16+) and teachers/staff on Aquidneck Island, RI.

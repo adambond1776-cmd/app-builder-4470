@@ -20,7 +20,7 @@ from config import (
     FOUNDING_20_CAP, SESSION_DAYS,
     CURRENT_ROUND_NAME, CURRENT_ROUND_DEADLINE,
     CURRENT_ROUND_SPONSOR_NAME, CURRENT_ROUND_SPONSOR_URL,
-    PITCH_TEXT_MAX_CHARS, UPVOTE_RATE_LIMIT_PER_IP_PER_DAY,
+    PITCH_TEXT_MAX_CHARS, UPVOTE_RATE_LIMIT_PER_IP_PER_DAY, PITCH_ROUND_CAP,
     FAMILY_PLAN_LAUNCH_PRICE, FOUNDING_PARENT_PRICE, FOUNDING_PARENT_CAP,
     INVITE_CODE_EXPIRY_HOURS, FEATURE_POLL_OPTIONS,
     PARENT_CHAT_MODEL, PARENT_SUMMARY_MODEL, PARENT_MAX_REPLY_TOKENS,
@@ -662,6 +662,12 @@ class PitchSubmit(BaseModel):
     youtube_url: Optional[str] = None
 
 
+class PitchWaitlistEntry(BaseModel):
+    name: str
+    email: str
+    note: Optional[str] = None
+
+
 class JudgeFlag(BaseModel):
     interested: bool
     note: Optional[str] = ""
@@ -669,11 +675,17 @@ class JudgeFlag(BaseModel):
 
 @api_router.get("/pitch/round")
 async def pitch_round():
+    submission_count = await db.pitch_submissions.count_documents({"round_name": CURRENT_ROUND_NAME})
+    cap = PITCH_ROUND_CAP
     return {
         "name": CURRENT_ROUND_NAME,
         "deadline": CURRENT_ROUND_DEADLINE,
         "sponsor_name": CURRENT_ROUND_SPONSOR_NAME,
         "sponsor_url": CURRENT_ROUND_SPONSOR_URL,
+        "submission_count": submission_count,
+        "cap": cap,
+        "spots_left": max(0, cap - submission_count),
+        "is_full": submission_count >= cap,
     }
 
 
@@ -698,6 +710,11 @@ async def pitch_submit(req: PitchSubmit, user: User = Depends(get_current_user))
     if existing:
         raise HTTPException(status_code=400, detail="Already submitted for this round")
 
+    # Enforce per-round cap (cost control)
+    submission_count = await db.pitch_submissions.count_documents({"round_name": CURRENT_ROUND_NAME})
+    if submission_count >= PITCH_ROUND_CAP:
+        raise HTTPException(status_code=409, detail="Round is full. Join the waitlist for the next round.")
+
     base = slugify(user.name or user.email.split("@")[0])
     slug = f"{base}-{uuid.uuid4().hex[:6]}"
     doc = {
@@ -715,6 +732,49 @@ async def pitch_submit(req: PitchSubmit, user: User = Depends(get_current_user))
     }
     await db.pitch_submissions.insert_one(doc)
     return {"ok": True, "slug": slug}
+
+
+@api_router.post("/pitch/waitlist")
+async def pitch_waitlist(body: PitchWaitlistEntry, request: Request):
+    """Public waitlist endpoint — used when current round cap is reached."""
+    name = (body.name or "").strip()[:120]
+    email = (body.email or "").strip().lower()[:200]
+    note = (body.note or "").strip()[:1000] or None
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Name and email required")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Valid email required")
+
+    # De-dupe by email + round
+    existing = await db.pitch_waitlist.find_one(
+        {"email": email, "round_name": CURRENT_ROUND_NAME}, {"_id": 0}
+    )
+    if existing:
+        return {"ok": True, "already_on_waitlist": True, "id": existing["id"]}
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "email": email,
+        "note": note,
+        "round_name": CURRENT_ROUND_NAME,
+        "source_ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", "")[:300] or None,
+        "status": "new",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.pitch_waitlist.insert_one(doc)
+    return {"ok": True, "already_on_waitlist": False, "id": doc["id"]}
+
+
+@api_router.get("/admin/pitch/waitlist")
+async def admin_pitch_waitlist(_: bool = Depends(require_admin)):
+    items = await db.pitch_waitlist.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    by_round = {}
+    for it in items:
+        r = it.get("round_name") or "unknown"
+        by_round[r] = by_round.get(r, 0) + 1
+    return {"waitlist": items, "total": len(items), "by_round": by_round}
 
 
 @api_router.get("/pitch/mine")
