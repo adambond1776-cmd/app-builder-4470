@@ -43,7 +43,7 @@ function parsePath() {
   if (pathname === "/pitches") return { type: "pitches_hub" };
   if (pathname === "/sponsor") return { type: "sponsor" };
   if (pathname === "/pricing") return { type: "pricing" };
-  if (pathname === "/aquidneck" || pathname === "/free-books" || pathname === "/free") return { type: "aquidneck" };
+  if (pathname === "/aquidneck" || pathname === "/free-books" || pathname === "/free" || pathname === "/free-aquidneck-books" || pathname === "/rhode-island-seniors-free-books") return { type: "aquidneck" };
   if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");

@@ -424,37 +424,78 @@ export default function AquidneckLanding() {
                 className="text-[10px] font-bold uppercase tracking-widest mb-2"
                 style={{ color: "#475569" }}
               >
-                Table of Contents
+                Contents
               </div>
               <ol
                 className="text-sm space-y-1.5"
                 style={{ color: "#334155" }}
               >
-                <li>1. The Four Burners — why you can't have it all</li>
-                <li>2. School / Work — the burner that yells loudest</li>
-                <li>3. Relationships — the burner you'll regret turning off</li>
-                <li>4. Health — the quiet burner that breaks everything</li>
-                <li>5. Your Dreams — the burner only you can light</li>
-                <li>6. Picking what to dim (without quitting)</li>
-                <li>7. Senior year — the rehearsal for adult life</li>
+                <li>· Find Your Road First</li>
+                <li>· Introduction: The Stove</li>
+                <li>1. The Myth of Separation</li>
+                <li>2. You Already Have the OS</li>
+                <li>3. Why the Home Is Losing</li>
+                <li>4. The Disillusionment Tax</li>
+                <li>5. Genius Mining</li>
+                <li>6. The Foundation</li>
+                <li>7. Leading the People Around You</li>
+                <li>8. The Integration Playbook</li>
+                <li>9. Activation</li>
+                <li>10. Your Life. Your Build.</li>
+                <li className="pt-2 italic" style={{ color: "#64748b" }}>
+                  + The Toolkit (8 hands-on tools)
+                </li>
               </ol>
             </div>
 
             <div className="text-sm leading-relaxed space-y-3 mb-5" style={{ color: "#334155" }}>
-              <p>
-                <strong>From the introduction:</strong> Most people will tell
-                you the secret to a good life is balance. They're lying — or
-                they don't know what balance actually costs. Here's the truth:
-                you have four burners on your stove. School / Work.
-                Relationships. Health. Your Dreams. Light all four full blast
-                and the kitchen smokes. Pick the two you can't live without,
-                give them real heat, and let the others simmer.
+              <div
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: "#0d9488" }}
+              >
+                Introduction · The Stove
+              </div>
+              <p className="italic" style={{ color: "#64748b" }}>
+                "You don't rise to the level of your goals. You fall to the
+                level of your systems." — James Clear, <em>Atomic Habits</em>
               </p>
               <p>
-                You're 16, 17, 18 years old reading this — about to graduate or
-                figuring out what's next. Adults are about to ask you what your
-                "plan" is. This book is the framework I wish I'd had at your
-                age, before I learned everything the slow, expensive way.
+                There's a theory that's been quietly accepted as gospel in elite
+                business circles — and handed down to everyone else who wanted
+                to get ahead. It goes like this: your life is a stove with four
+                burners. <strong>Work. Relationships. Health. Yourself.</strong>{" "}
+                To be successful, you have to turn one off. To be{" "}
+                <em>really</em> successful, you have to turn two off.
+              </p>
+              <p>
+                The highest performers in the world didn't just hear this
+                theory. They lived it — and some of them said so out loud. Elon
+                Musk has been blunt about the personal cost of building Tesla
+                and SpaceX simultaneously. Sam Altman has spoken candidly about
+                what it takes to run OpenAI at this moment in history. Jeff
+                Bezos called the personal tradeoffs "harmony" — which, when you
+                read between the lines, means: accept what you're giving up and
+                make peace with it. These aren't failures of character. These
+                are some of the most disciplined operators alive. And they all
+                arrived at the same conclusion.
+              </p>
+              <p>
+                Here's the problem: most of you reading this are eighteen,
+                twenty-two, or somewhere in between. You haven't built the
+                empire yet. You're trying to figure out which road to take while
+                managing school or work or a trade, your relationships, your
+                health, and the terrifying question of who you're actually
+                becoming. And someone already told you — directly or indirectly
+                — that you can't run all of it at once.
+              </p>
+              <p>
+                <strong>This book is a direct challenge to that idea.</strong>{" "}
+                The Four Burners theory assumes the stove is fixed. That the
+                hardware is the constraint. What it misses is that most people
+                aren't failing because they have too many burners — they're
+                failing because nobody ever gave them a system for running all
+                of them on the same architecture. The answer isn't to shut
+                burners off. <strong>The answer is to upgrade the stove.</strong>
               </p>
             </div>
 
@@ -1057,8 +1098,9 @@ export default function AquidneckLanding() {
             <span className="font-black text-white text-sm">MaxCoach</span>
           </div>
           <div className="text-xs leading-relaxed" style={{ maxWidth: "40rem", margin: "0 auto" }}>
-            A free community gift from a local Rhode Island author for Aquidneck
-            Island students & educators.
+            Made with love for Aquidneck Island. A free community gift from a
+            local Rhode Island author for Newport, Middletown & Portsmouth
+            students and educators.
           </div>
           <div className="text-[11px] flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3" style={{ color: "rgba(255,255,255,0.4)" }}>
             <span>Part of Hidden Genius Labs LLC</span>
