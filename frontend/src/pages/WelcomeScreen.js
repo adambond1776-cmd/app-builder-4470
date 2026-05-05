@@ -4,12 +4,18 @@ import { QUOTES } from "./FourBurnersPage";
 
 export default function WelcomeScreen({ onStart, onBack, onOpenBurners }) {
   const [qIdx, setQIdx] = useState(0);
+  const [betaAck, setBetaAck] = useState(false);
   const teaserQuotes = [QUOTES[0], QUOTES[2], QUOTES[4], QUOTES[6]]; // Elon, Bezos, Huberman, Naval
   useEffect(() => {
     const t = setInterval(() => setQIdx((i) => (i + 1) % teaserQuotes.length), 6000);
     return () => clearInterval(t);
   }, []);
   const tq = teaserQuotes[qIdx];
+
+  const handleStart = () => {
+    if (!betaAck) return;
+    onStart();
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full px-6 text-center relative overflow-hidden" data-testid="welcome-screen">
@@ -56,9 +62,35 @@ export default function WelcomeScreen({ onStart, onBack, onOpenBurners }) {
           </AnimatePresence>
         </motion.div>
 
-        <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} whileTap={{ scale: 0.97 }} onClick={onStart} data-testid="welcome-start-btn" className="mt-4 px-10 py-4 rounded-2xl text-base font-bold tracking-wide flex items-center gap-3" style={{ background: "linear-gradient(135deg, hsl(213,100%,58%) 0%, hsl(213,100%,48%) 100%)", boxShadow: "0 0 24px hsla(213,100%,60%,0.4), 0 4px 16px rgba(0,0,0,0.4)", color: "#fff" }}>
-          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#fff" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" opacity=".9"/><path fill="#fff" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" opacity=".7"/><path fill="#fff" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" opacity=".95"/></svg>
-          Sign in with Google
+        <motion.label
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          data-testid="welcome-beta-ack-label"
+          className="mt-2 flex items-start gap-3 max-w-xs w-full px-4 py-3 rounded-xl cursor-pointer text-left"
+          style={{
+            background: betaAck ? "hsla(213,100%,55%,0.12)" : "hsl(220,30%,12%)",
+            border: `1px solid ${betaAck ? "hsla(213,100%,60%,0.55)" : "hsl(220,30%,22%)"}`,
+            transition: "background 0.18s, border-color 0.18s",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={betaAck}
+            onChange={(e) => setBetaAck(e.target.checked)}
+            data-testid="welcome-beta-ack-checkbox"
+            className="mt-0.5 w-4 h-4 flex-shrink-0 accent-blue-500 cursor-pointer"
+          />
+          <span className="text-[11px] leading-relaxed" style={{ color: "hsl(210,20%,82%)" }}>
+            <strong style={{ color: "hsl(213,100%,72%)" }}>This is a beta.</strong>{" "}
+            I understand Max is in active development — features may change,
+            break, or improve fast. I'm here to help shape it.
+          </span>
+        </motion.label>
+
+        <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} whileTap={{ scale: betaAck ? 0.97 : 1 }} onClick={handleStart} disabled={!betaAck} data-testid="welcome-start-btn" className="mt-2 px-10 py-4 rounded-2xl text-base font-bold tracking-wide flex items-center gap-3 disabled:cursor-not-allowed" style={{ background: betaAck ? "linear-gradient(135deg, hsl(213,100%,58%) 0%, hsl(213,100%,48%) 100%)" : "hsl(220,30%,18%)", boxShadow: betaAck ? "0 0 24px hsla(213,100%,60%,0.4), 0 4px 16px rgba(0,0,0,0.4)" : "none", color: betaAck ? "#fff" : "hsl(220,15%,45%)", opacity: betaAck ? 1 : 0.6, transition: "background 0.2s, opacity 0.2s, box-shadow 0.2s" }}>
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill={betaAck ? "#fff" : "hsl(220,15%,45%)"} d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill={betaAck ? "#fff" : "hsl(220,15%,45%)"} d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" opacity=".9"/><path fill={betaAck ? "#fff" : "hsl(220,15%,45%)"} d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" opacity=".7"/><path fill={betaAck ? "#fff" : "hsl(220,15%,45%)"} d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" opacity=".95"/></svg>
+          {betaAck ? "Sign in with Google" : "Acknowledge beta to continue"}
         </motion.button>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }} className="text-xs" style={{ color: "hsl(220,15%,40%)" }}>

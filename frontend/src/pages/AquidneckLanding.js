@@ -6,6 +6,10 @@ import { apiJSON } from "../lib/api";
 const HERO_BG =
   "https://images.unsplash.com/photo-1505852679233-d9fd70aff56d?auto=format&fit=crop&w=1920&q=70";
 
+// Real book cover — uploaded by Adam (Hidden Genius Labs LLC)
+const BOOK_COVER =
+  "https://customer-assets.emergentagent.com/job_app-builder-4470/artifacts/0n8vtbwc_Screenshot%202026-05-05%20125144.png";
+
 const SCHOOLS = [
   { value: "newport_high", label: "Newport High" },
   { value: "middletown_high", label: "Middletown High" },
@@ -346,55 +350,30 @@ export default function AquidneckLanding() {
         data-testid="sample-section"
       >
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          {/* Cover mock */}
+          {/* Cover image — real book cover */}
           <div className="order-2 md:order-1">
             <div
-              className="aspect-[3/4] rounded-2xl mx-auto max-w-xs flex flex-col items-center justify-center text-center p-8 relative overflow-hidden"
+              className="aspect-[3/4] rounded-2xl mx-auto max-w-xs overflow-hidden relative"
               style={{
-                background:
-                  "linear-gradient(160deg, #0f766e 0%, #0c4a6e 60%, #0f172a 100%)",
                 boxShadow:
-                  "0 30px 60px -20px rgba(15,23,42,0.4), inset 0 0 0 1px rgba(255,255,255,0.08)",
+                  "0 30px 60px -20px rgba(15,23,42,0.55), 0 0 0 1px rgba(15,23,42,0.08)",
               }}
-              data-testid="book-cover-mock"
+              data-testid="book-cover-image"
             >
-              <div
-                className="absolute top-5 left-5 text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: "rgba(94,234,212,0.85)" }}
-              >
-                Adam Bond Devereau
-              </div>
-              <h3
-                className="font-black leading-tight text-white"
-                style={{ fontSize: "clamp(1.6rem, 4vw, 2rem)" }}
-              >
-                The Business of Life
-              </h3>
-              <div
-                className="text-xs mt-2 mb-5"
-                style={{ color: "rgba(255,255,255,0.7)" }}
-              >
-                Student Edition
-              </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-[140px]">
-                {BURNERS.map((b) => (
-                  <div
-                    key={b.label}
-                    className="aspect-square rounded-full"
-                    style={{
-                      background: b.color,
-                      opacity: 0.85,
-                      boxShadow: `0 0 18px ${b.color}`,
-                    }}
-                  />
-                ))}
-              </div>
-              <div
-                className="absolute bottom-5 text-[10px] uppercase tracking-widest"
-                style={{ color: "rgba(255,255,255,0.5)" }}
-              >
-                Four Burners · One Life
-              </div>
+              <img
+                src={BOOK_COVER}
+                alt="The Business of Life: Student Edition — by Adam Bond Devereau"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+            <div
+              className="text-center mt-4 text-xs"
+              style={{ color: "#64748b" }}
+            >
+              <strong style={{ color: "#0f172a" }}>The Business of Life</strong>{" "}
+              · Student Edition
+              <div className="text-[11px] mt-0.5">by Adam Bond Devereau</div>
             </div>
           </div>
 
