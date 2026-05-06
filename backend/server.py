@@ -1,11 +1,13 @@
 import os
 import uuid
+import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 from typing import List, Literal, Optional
 
 import httpx
+import resend
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -41,6 +43,86 @@ client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+
+# Resend email config (optional — emails silently skip if key missing)
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+
+# Aquidneck book delivery — public asset URL of the PDF
+AQUIDNECK_BOOK_URL = "https://customer-assets.emergentagent.com/job_app-builder-4470/artifacts/mo26ulpq_The%20Business%20of%20Life%20SE.pdf"
+AQUIDNECK_BOOK_TITLE = "The Business of Life: Student Edition"
+
+
+async def send_email_async(to_email: str, subject: str, html: str, text_fallback: Optional[str] = None) -> dict:
+    """Send a transactional email via Resend. Returns {ok, id|error}.
+    Non-blocking (runs Resend's sync SDK in a thread). Never raises — caller decides whether to surface failure."""
+    if not RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY missing — email NOT sent to %s", to_email)
+        return {"ok": False, "error": "RESEND_API_KEY not configured"}
+    params = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }
+    if text_fallback:
+        params["text"] = text_fallback
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        email_id = result.get("id") if isinstance(result, dict) else None
+        logger.info("Resend send OK to=%s id=%s", to_email, email_id)
+        return {"ok": True, "id": email_id}
+    except Exception as e:
+        msg = str(e)
+        logger.error("Resend send FAILED to=%s err=%s", to_email, msg)
+        return {"ok": False, "error": msg}
+
+
+def aquidneck_email_html(first_name: str, school_label: str, role_label: str) -> str:
+    """Branded HTML email body for Aquidneck book delivery."""
+    return f"""<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.06);">
+          <tr><td style="background:linear-gradient(135deg,#0ea5e9,#0d9488);padding:32px 28px;color:#ffffff;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:0.9;">A free gift from a local Rhode Island author</div>
+            <div style="font-size:26px;font-weight:900;line-height:1.15;margin-top:6px;">Hey {first_name} — your free book is ready.</div>
+          </td></tr>
+          <tr><td style="padding:28px;">
+            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.55;color:#334155;">Thanks for claiming your free copy of <strong>The Business of Life: Student Edition</strong>. This is the book I wish I'd had at your age — written for {role_label.lower()}s like you.</p>
+            <p style="margin:0 0 22px 0;font-size:15px;line-height:1.55;color:#334155;">Click below to download and start reading this week:</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 22px auto;">
+              <tr><td style="border-radius:999px;background:linear-gradient(135deg,#0ea5e9,#0d9488);">
+                <a href="{AQUIDNECK_BOOK_URL}" style="display:inline-block;padding:16px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">📖 Download {AQUIDNECK_BOOK_TITLE}</a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 14px 0;font-size:13px;line-height:1.6;color:#64748b;">Inside, you'll find <strong>The Four Burners framework</strong> + the <strong>Prompt Level-Up bonus</strong> — ready-to-use AI prompts that help you discover your strengths, explore careers, and build your next steps.</p>
+            <div style="margin:24px 0;padding:18px;background:#f0fdfa;border-left:4px solid #0d9488;border-radius:8px;">
+              <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#0f766e;margin-bottom:6px;">If the book helps you</div>
+              <p style="margin:0;font-size:14px;line-height:1.55;color:#0f172a;">An honest review on Amazon means the world. And if you want to share your level-up journey on camera, head to <a href="https://maxcoach.app/" style="color:#0d9488;font-weight:700;">maxcoach.app</a> — you could be one of the first Rhode Island students featured.</p>
+            </div>
+            <p style="margin:18px 0 0 0;font-size:13px;line-height:1.55;color:#64748b;">{school_label} student / staff, this one's for you. Reply to this email if you have questions — I read every reply.</p>
+            <p style="margin:18px 0 0 0;font-size:13px;line-height:1.55;color:#64748b;">— Adam Bond Devereau<br/><span style="color:#94a3b8;">Hidden Genius Labs LLC</span></p>
+          </td></tr>
+          <tr><td style="padding:18px 28px;background:#0f172a;color:#94a3b8;font-size:11px;text-align:center;">Made with love for Aquidneck Island. You received this because you claimed your free book at maxcoach.app.</td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+
+
+SCHOOL_LABELS = {
+    "newport_high": "Newport High",
+    "middletown_high": "Middletown High",
+    "portsmouth_high": "Portsmouth High",
+    "other": "Aquidneck Island",
+}
+ROLE_LABELS = {"junior": "Junior", "senior": "Senior", "teacher_staff": "Teacher / Staff"}
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -2544,7 +2626,59 @@ async def aquidneck_claim(body: AquidneckClaim, request: Request):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.aquidneck_book_signups.insert_one(doc)
-    return {"ok": True, "already_claimed": False, "id": doc["id"]}
+
+    # Fire email delivery (non-blocking — never fails the API response)
+    school_label = SCHOOL_LABELS.get(body.school, "Aquidneck Island")
+    if body.school == "other" and doc.get("other_school_name"):
+        school_label = doc["other_school_name"]
+    role_label = ROLE_LABELS.get(body.role, body.role)
+    html = aquidneck_email_html(first_name, school_label, role_label)
+    text_fallback = (
+        f"Hey {first_name} — thanks for claiming your free copy of {AQUIDNECK_BOOK_TITLE}.\n\n"
+        f"Download here: {AQUIDNECK_BOOK_URL}\n\n"
+        "If the book helps you, an honest Amazon review means the world.\n\n"
+        "— Adam Bond Devereau · Hidden Genius Labs LLC"
+    )
+    email_result = await send_email_async(
+        to_email=email,
+        subject=f"📖 {first_name}, your free copy of The Business of Life is here",
+        html=html,
+        text_fallback=text_fallback,
+    )
+    # Persist delivery outcome on the signup record (non-blocking, best-effort)
+    try:
+        await db.aquidneck_book_signups.update_one(
+            {"id": doc["id"]},
+            {"$set": {
+                "email_sent": email_result.get("ok", False),
+                "email_id": email_result.get("id"),
+                "email_error": email_result.get("error"),
+                "email_sent_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+    except Exception as ex:
+        logger.warning("Failed to update email status on signup %s: %s", doc["id"], ex)
+
+    return {"ok": True, "already_claimed": False, "id": doc["id"], "email_sent": email_result.get("ok", False)}
+
+
+class AdminEmailTest(BaseModel):
+    to_email: str
+    first_name: Optional[str] = "Adam"
+
+
+@api_router.post("/admin/email/test")
+async def admin_email_test(body: AdminEmailTest, _: bool = Depends(require_admin)):
+    """Admin smoke test for the Aquidneck delivery email."""
+    html = aquidneck_email_html(body.first_name or "there", "Newport High", "Test")
+    text_fallback = f"Test email from MaxCoach. Download: {AQUIDNECK_BOOK_URL}"
+    res = await send_email_async(
+        to_email=body.to_email,
+        subject=f"📖 [TEST] Your free copy of {AQUIDNECK_BOOK_TITLE}",
+        html=html,
+        text_fallback=text_fallback,
+    )
+    return {"ok": res.get("ok", False), "result": res, "from": RESEND_FROM_EMAIL}
 
 
 @api_router.get("/admin/aquidneck/signups")
