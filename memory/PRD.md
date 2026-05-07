@@ -243,3 +243,110 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - Split `/app/backend/server.py` (1,390 lines) into `routers/` (auth, chat, family, pitch, admin) + `services/` (parent_memory, kid_memory) + `prompts/`
 - Public voting mechanic for Parent Ideas (kids upvote parents' feature ideas)
 - maxcoach.mom domain routing
+
+
+---
+
+## May 5–7 session updates (this fork)
+
+### ✅ Welcome screen — beta acknowledgment gate
+- `/app/frontend/src/pages/WelcomeScreen.js` — added required checkbox before "Sign in with Google" can be clicked
+- Copy: *"This is a beta. I understand Max is in active development — features may change, break, or improve fast. I'm here to help shape it."*
+- Button text swaps from "Acknowledge beta to continue" (disabled, gray) → "Sign in with Google" (active, blue, glowing) once checkbox is ticked
+- Test IDs: `welcome-beta-ack-checkbox`, `welcome-beta-ack-label`, `welcome-start-btn`
+
+### ✅ Aquidneck landing — real book cover wired
+- Real cover image plugged in: `https://customer-assets.emergentagent.com/job_app-builder-4470/artifacts/0n8vtbwc_Screenshot%202026-05-05%20125144.png`
+- Real intro text from `TBOL_LAUNCH_COMPLETE FINAL 04252016.docx` ("Introduction · The Stove" — ~400 words verbatim)
+- Real TOC: Find Your Road First → Chapter 10 + The Toolkit
+- Footer copy: "Made with love for Aquidneck Island."
+- Aliases added: `/free-aquidneck-books`, `/rhode-island-seniors-free-books` (in addition to `/aquidneck`, `/free-books`, `/free`)
+- ⚠️ HERO photo still generic coastal stock — Adam must provide a properly-licensed Newport photo. The 4 photos he uploaded had visible Dreamstime/Alamy watermarks (cannot legally use 2 of them).
+
+### ✅ Max Pitch live with cap + waitlist (already in PRD above — keep here for cohesion)
+- 50-pitch cap per round (`PITCH_ROUND_CAP = 50` in config.py)
+- New "What this is" copy on the submit screen
+- Capacity meter + auto-swap to waitlist form when full
+
+### ✅ Resend email integration — WIRED, BLOCKED ON DOMAIN VERIFICATION
+- **SDK:** `resend==2.30.0` installed in `requirements.txt`
+- **Env vars in `/app/backend/.env`:**
+  - `RESEND_API_KEY=re_2D1LtHcL_GBfuLAWeMGNfEseHRvZjhQys` ← live, last rotation
+  - `RESEND_FROM_EMAIL=adam@maxcoach.app`
+- **`server.py` additions:**
+  - `send_email_async(to_email, subject, html, text_fallback)` — runs Resend SDK in `asyncio.to_thread`, never raises, returns `{ok, id|error}`
+  - `aquidneck_email_html(first_name, school_label, role_label)` — branded HTML email body with cover banner, teal CTA button, Amazon-review nudge, signature
+  - `SCHOOL_LABELS` + `ROLE_LABELS` — display-name lookups
+  - Aquidneck book PDF URL: `https://customer-assets.emergentagent.com/job_app-builder-4470/artifacts/mo26ulpq_The%20Business%20of%20Life%20SE.pdf`
+- **`POST /api/aquidneck/claim`** now fires the branded email after saving the signup, persists `email_sent` / `email_id` / `email_error` / `email_sent_at` on the signup record
+- **`POST /api/admin/email/test`** — admin smoke-test endpoint, takes `{to_email, first_name}`
+- **Verified working:** test email delivered to `adambond1776@gmail.com` from `onboarding@resend.dev` sandbox sender
+- **🔴 BLOCKER:** `maxcoach.app` domain is NOT verified in Resend. Real student signups currently SAVE to DB but emails fail because `adam@maxcoach.app` from-address is rejected without DNS verification. Adam must:
+  1. Go to resend.com/domains → Add `maxcoach.app`
+  2. Add the SPF + DKIM + (optional DMARC) DNS records at his registrar
+  3. Click Verify in Resend
+  4. Then run `POST /api/admin/email/test` to confirm
+
+### ✅ Stripe feature-flagged OFF (preserved, not deleted)
+- `/app/backend/config.py`: added `ENABLE_STRIPE_CHECKOUT = False`, `ENABLE_PAYPAL_CHECKOUT = True`
+- `/api/public-config` endpoint exposes flags to frontend (no secrets, safe)
+- `/app/frontend/src/lib/stripe.js`: `startCheckout()` now reads flags via `getPaymentFlags()` (cached). When Stripe disabled, throws friendly error ("Payments are temporarily paused while we move to PayPal…")
+- `/app/frontend/src/pages/PricingPage.js`: Stripe buy buttons are conditionally rendered behind `stripeLive` flag — replaced with PayPal buttons when `paypalLive=true`, or a "💳 Checkout opens this week" placeholder if both providers off
+- **All Stripe code is intact.** To re-enable: flip `ENABLE_STRIPE_CHECKOUT = True` in `config.py`. Zero rework.
+
+### ✅ PayPal Sandbox integration — WIRED, AWAITING BUYER-FLOW TEST
+- **Adam's PayPal sandbox app credentials in `/app/backend/.env`:**
+  - `PAYPAL_ENV=sandbox`
+  - `PAYPAL_CLIENT_ID=ARHdUgOJyOjw_vx_dej2v8Owj7oEAblRF-8UpK97Vrm6f-KUc7aygrbi9SjWB6vPBAPtkPO6_zTI5dKu`
+  - `PAYPAL_SECRET=EP0_YWcpuD1KTaSiGy6rjiS4lR0IlAao88ddy_rhB9yCKuWkDjkZ1bLBG60XCIXy0L7QKZPbf9IuAIz8`
+- ⚠️ **The PayPal secret is exposed in the chat history of this thread.** Adam needs to revoke + regenerate it in [developer.paypal.com](https://developer.paypal.com) → Apps & Credentials → MaxCoach app → Show → 3-dots on Secret → revoke + create new → paste new secret to swap in `.env`.
+- **Backend (`server.py`):**
+  - Constants: `PAYPAL_BASE` switches between sandbox/live based on `PAYPAL_ENV`
+  - `_paypal_access_token()` — OAuth2 client_credentials, returns access_token; uses `httpx.AsyncClient` (no SDK)
+  - `POST /api/paypal/create-order` — auth-gated via `_get_optional_user`, server-defined catalog (uses `STRIPE_PRODUCTS` dict — same prices, same kinds), creates PayPal Orders v2 order with `intent=CAPTURE`, `shipping_preference=NO_SHIPPING`, persists pending `payment_transactions` doc with `provider="paypal"` and PayPal order_id stored in the existing `session_id` field for `_credit_transaction()` reuse
+  - `POST /api/paypal/capture-order` — captures the order, on `status=COMPLETED` updates `payment_status=paid` and calls existing `_credit_transaction(tx)` reducer (same flow Stripe uses) → boosters credited, founding locks set, sponsor inquiries marked paid. Idempotent: returns `already_credited: true` on repeat capture
+  - `GET /api/paypal/config` — public, returns `{enabled, client_id, env, currency}` for frontend SDK loader
+  - All errors logged with `logger.error()`, friendly user-facing messages on failure
+- **Frontend:**
+  - `yarn add @paypal/react-paypal-js` (v9.2.0)
+  - `/app/frontend/src/components/PayPalCheckoutButton.js` — reusable component:
+    - Loads `/paypal/config` once (cached promise)
+    - Wraps `PayPalScriptProvider` (client-id, currency, intent=capture)
+    - `<PayPalButtons>` with style `{layout:"vertical", color:"blue", shape:"pill", label:"paypal", height:48}`
+    - `createOrder` → calls `/api/paypal/create-order` with product_id + extras
+    - `onApprove` → calls `/api/paypal/capture-order` → fires `onApproved(res)` callback or `onError(msg)`
+    - Handles `onCancel` and `onError` gracefully
+  - `/app/frontend/src/pages/PricingPage.js`:
+    - Reads `/api/public-config` on mount, sets `paypalLive` flag
+    - When `paypalLive` AND user is signed in → renders `<PayPalCheckoutButton>` for Family Plan, Miles, and 3 Boosters (max/maya/miles)
+    - When `paypalLive` AND user is signed OUT → renders "Sign in to lock $X/mo →" button
+    - On successful purchase → shows green "✓ You're locked in — check your email" success state
+    - Test IDs: `pricing-buy-{tier}` removed, replaced with `paypal-button-{tier}` and `pricing-bought-{tier}`
+- **Curl verification (all PASSED):**
+  - `GET /api/paypal/config` returns enabled=true + client_id + env=sandbox
+  - `POST /api/paypal/create-order` (sponsor_spotlight, no auth) → returned real PayPal order_id `4FL38553PR872532X`
+  - `POST /api/paypal/create-order` (founding_family_lock, authed via test session) → returned real PayPal order_id `022960226V0893613`
+- **Still needs to be tested:** the buyer-approval popup + capture flow. This requires either a sandbox buyer email/password OR using PayPal's "Pay with Debit/Credit Card" guest-checkout option in the popup.
+
+### 🔴 BLOCKERS / things Adam must still do for full launch
+1. **Verify maxcoach.app in Resend** (15 min, free) — required for real student book emails to land
+2. **Test PayPal buyer flow end-to-end in sandbox** — sign into the running app, click PayPal button on Pricing page, complete sandbox checkout, verify the green "locked in" state shows and the user's `family_founding_locked_until` updates in MongoDB
+3. **Rotate the leaked PayPal sandbox secret** (see above)
+4. **Provide a properly-licensed Newport hero photo** for Aquidneck landing (current is generic coastal stock; the 4 he uploaded were watermarked Dreamstime/Alamy stock — cannot use)
+5. **Switch to PayPal Live when ready** — requires (a) PayPal Business account with bank linkage and (b) creating a "Live" app in developer.paypal.com → swap CLIENT_ID + SECRET in `.env` → flip `PAYPAL_ENV=live`
+6. **PayPal Subscriptions (recurring billing)** — currently only one-time payments are wired. For monthly auto-renew on Family Plan / Miles / Boosters, Adam must create Products + Plans in PayPal dashboard and provide `plan_id` for each. Then a separate `/api/paypal/create-subscription` endpoint needs adding. Keep this scoped as a Phase 2 add-on.
+
+### 📁 Files touched this session
+- `/app/backend/.env` — added Resend + PayPal env vars
+- `/app/backend/config.py` — added `PITCH_ROUND_CAP=50`, `ENABLE_STRIPE_CHECKOUT=False`, `ENABLE_PAYPAL_CHECKOUT=True`
+- `/app/backend/server.py` — Resend integration, PayPal endpoints, `/public-config`, pitch cap + waitlist endpoints, beta-ack pass-through, Aquidneck-claim email firing
+- `/app/backend/requirements.txt` — added `resend==2.30.0`
+- `/app/frontend/package.json` — added `@paypal/react-paypal-js@9.2.0`
+- `/app/frontend/src/App.js` — added `/aquidneck`, `/free-aquidneck-books`, `/rhode-island-seniors-free-books` route aliases
+- `/app/frontend/src/lib/stripe.js` — feature-flag aware `startCheckout()` + `isStripeEnabled()` + `isPaypalEnabled()`
+- `/app/frontend/src/pages/AquidneckLanding.js` — NEW (full landing page)
+- `/app/frontend/src/pages/MaxPitchSubmit.js` — rewritten with new copy + capacity meter + waitlist swap
+- `/app/frontend/src/pages/PricingPage.js` — added paypalLive flag handling + PayPal buttons + bought-state UI
+- `/app/frontend/src/pages/WelcomeScreen.js` — beta acknowledgment checkbox gate
+- `/app/frontend/src/components/PayPalCheckoutButton.js` — NEW (reusable Smart Button component)
+
