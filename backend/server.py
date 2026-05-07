@@ -34,6 +34,7 @@ from config import (
     MILES_RAW_HISTORY_KEEP, MILES_DAILY_MESSAGE_CAP, MILES_NUDGE_APPROACHING, MILES_NUDGE_FINAL,
     MILES_FOUNDING_PRICE, MILES_LAUNCH_PRICE, MILES_FOUNDING_CAP,
     MILES_VALID_PERSONAS, MILES_VALID_SUBJECTS, MILES_FEATURE_POLL_OPTIONS,
+    ENABLE_STRIPE_CHECKOUT, ENABLE_PAYPAL_CHECKOUT,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -291,6 +292,15 @@ async def get_current_user(
 @api_router.get("/health")
 async def health():
     return {"ok": True, "time": datetime.now(timezone.utc).isoformat()}
+
+
+@api_router.get("/public-config")
+async def public_config():
+    """Public flags the frontend reads on boot. Safe — no secrets, no PII."""
+    return {
+        "enable_stripe_checkout": ENABLE_STRIPE_CHECKOUT,
+        "enable_paypal_checkout": ENABLE_PAYPAL_CHECKOUT,
+    }
 
 
 # -----------------------------

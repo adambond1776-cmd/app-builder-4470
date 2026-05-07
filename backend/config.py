@@ -84,3 +84,9 @@ ENABLE_DOCUMENTARY_INTEREST = True
 ENABLE_FOUNDING_20_APPLICATIONS = True
 ENABLE_MAX_PITCH = True
 ENABLE_FAMILY_OS = True
+
+# --- Payment provider flags ---
+# Set ENABLE_STRIPE_CHECKOUT=False to hide Stripe buttons in the UI.
+# Stripe backend code remains intact — flip back to True any time to re-enable.
+ENABLE_STRIPE_CHECKOUT = False
+ENABLE_PAYPAL_CHECKOUT = True

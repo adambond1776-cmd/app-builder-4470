@@ -75,13 +75,21 @@ export default function PricingPage({ onBack }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [busy, setBusy] = useState(null); // tier id while opening checkout
   const [err, setErr] = useState(null);
+  const [flags, setFlags] = useState({ enable_stripe_checkout: true, enable_paypal_checkout: false });
 
   useEffect(() => {
     apiJSON("/auth/me")
       .then((u) => setUser(u))
       .catch(() => setUser(false))
       .finally(() => setAuthChecked(true));
+    apiJSON("/public-config")
+      .then((f) => setFlags(f || {}))
+      .catch(() => {});
   }, []);
+
+  // Show the live Stripe buy button only when Stripe is on. PayPal buttons
+  // will render in their own conditional block once that integration ships.
+  const stripeLive = !!flags.enable_stripe_checkout;
 
   const buy = async (productId, tierId) => {
     if (!user) {
@@ -222,7 +230,19 @@ export default function PricingPage({ onBack }) {
                   </li>
                 ))}
               </ul>
-              {t.product_id ? (
+              {!stripeLive ? (
+                <div
+                  data-testid={`pricing-coming-soon-${t.id}`}
+                  className="w-full py-3.5 rounded-2xl text-center text-sm font-bold"
+                  style={{
+                    background: "hsla(220,30%,18%,0.5)",
+                    color: "hsl(220,15%,70%)",
+                    border: "1px dashed hsl(220,30%,28%)",
+                  }}
+                >
+                  💳 Checkout opens this week — PayPal launching
+                </div>
+              ) : t.product_id ? (
                 <button
                   onClick={() => buy(t.product_id, t.id)}
                   disabled={busy === t.id || !authChecked}
