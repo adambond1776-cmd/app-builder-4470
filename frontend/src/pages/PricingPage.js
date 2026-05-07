@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
 import { startCheckout } from "../lib/stripe";
+import PayPalCheckoutButton from "../components/PayPalCheckoutButton";
 
 const TIERS = [
   {
@@ -90,6 +91,14 @@ export default function PricingPage({ onBack }) {
   // Show the live Stripe buy button only when Stripe is on. PayPal buttons
   // will render in their own conditional block once that integration ships.
   const stripeLive = !!flags.enable_stripe_checkout;
+  const paypalLive = !!flags.enable_paypal_checkout;
+  const [bought, setBought] = useState(null); // { tierId, productId, amount }
+
+  const handlePaypalApproved = (tierId, res) => {
+    setBought({ tierId, productId: res?.product_id, amount: res?.amount, alreadyCredited: !!res?.already_credited });
+    setErr(null);
+  };
+  const handlePaypalError = (msg) => setErr(msg);
 
   const buy = async (productId, tierId) => {
     if (!user) {
@@ -230,7 +239,88 @@ export default function PricingPage({ onBack }) {
                   </li>
                 ))}
               </ul>
-              {!stripeLive ? (
+              {paypalLive ? (
+                t.product_id ? (
+                  bought?.tierId === t.id ? (
+                    <div
+                      data-testid={`pricing-bought-${t.id}`}
+                      className="w-full py-3.5 rounded-2xl text-center text-sm font-bold"
+                      style={{
+                        background: "hsla(142,71%,45%,0.15)",
+                        color: "hsl(142,71%,75%)",
+                        border: "1px solid hsla(142,71%,45%,0.4)",
+                      }}
+                    >
+                      ✓ {bought.alreadyCredited ? "Already locked in" : "You're locked in"} — check your email
+                    </div>
+                  ) : !user && authChecked ? (
+                    <button
+                      onClick={() => buy(t.product_id, t.id)}
+                      data-testid={`pricing-signin-${t.id}`}
+                      className="w-full py-3.5 rounded-2xl font-bold text-sm"
+                      style={{
+                        background: `linear-gradient(135deg, ${t.accent}, ${t.accent.replace(",60%)", ",45%)").replace(",55%)", ",42%)")})`,
+                        color: "white",
+                      }}
+                    >
+                      Sign in to lock ${t.price}/mo →
+                    </button>
+                  ) : (
+                    <PayPalCheckoutButton
+                      productId={t.product_id}
+                      testIdSuffix={t.id}
+                      onApproved={(res) => handlePaypalApproved(t.id, res)}
+                      onError={handlePaypalError}
+                    />
+                  )
+                ) : (
+                  // Boosters — 3-up grid of PayPal buttons
+                  <div className="space-y-2">
+                    {[
+                      { id: "max", label: "Max +200", pid: "booster_max_30" },
+                      { id: "maya", label: "Maya +200", pid: "booster_maya_30" },
+                      { id: "miles", label: "Miles +200", pid: "booster_miles_30" },
+                    ].map((b) => (
+                      bought?.tierId === `booster-${b.id}` ? (
+                        <div
+                          key={b.id}
+                          data-testid={`pricing-bought-booster-${b.id}`}
+                          className="w-full py-2.5 rounded-xl text-center text-xs font-bold"
+                          style={{
+                            background: "hsla(142,71%,45%,0.15)",
+                            color: "hsl(142,71%,75%)",
+                            border: "1px solid hsla(142,71%,45%,0.4)",
+                          }}
+                        >
+                          ✓ {b.label} added
+                        </div>
+                      ) : !user && authChecked ? (
+                        <button
+                          key={b.id}
+                          onClick={() => buy(b.pid, `booster-${b.id}`)}
+                          data-testid={`pricing-signin-booster-${b.id}`}
+                          className="w-full py-2.5 rounded-xl text-xs font-bold"
+                          style={{
+                            background: "hsla(213,100%,55%,0.18)",
+                            color: "hsl(213,100%,75%)",
+                            border: "1px solid hsla(213,100%,55%,0.35)",
+                          }}
+                        >
+                          Sign in for {b.label}
+                        </button>
+                      ) : (
+                        <PayPalCheckoutButton
+                          key={b.id}
+                          productId={b.pid}
+                          testIdSuffix={`booster-${b.id}`}
+                          onApproved={(res) => handlePaypalApproved(`booster-${b.id}`, res)}
+                          onError={handlePaypalError}
+                        />
+                      )
+                    ))}
+                  </div>
+                )
+              ) : !stripeLive ? (
                 <div
                   data-testid={`pricing-coming-soon-${t.id}`}
                   className="w-full py-3.5 rounded-2xl text-center text-sm font-bold"

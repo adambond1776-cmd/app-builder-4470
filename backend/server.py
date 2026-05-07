@@ -2597,6 +2597,197 @@ async def admin_stripe_transactions(_: bool = Depends(require_admin)):
 
 
 # -----------------------------
+# PayPal Checkout — runs alongside Stripe (or solo, depending on config flags).
+# Uses PayPal Orders v2 REST API directly (no SDK dependency).
+# Reuses the same `payment_transactions` collection + `_credit_transaction()` reducer.
+# Server-defined catalog: never trusts price/currency from client.
+# -----------------------------
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID")
+PAYPAL_SECRET = os.environ.get("PAYPAL_SECRET")
+PAYPAL_ENV = os.environ.get("PAYPAL_ENV", "sandbox").lower()
+PAYPAL_BASE = "https://api-m.sandbox.paypal.com" if PAYPAL_ENV == "sandbox" else "https://api-m.paypal.com"
+
+
+async def _paypal_access_token() -> str:
+    if not (PAYPAL_CLIENT_ID and PAYPAL_SECRET):
+        raise HTTPException(status_code=500, detail="PayPal not configured")
+    async with httpx.AsyncClient(timeout=15) as ax:
+        resp = await ax.post(
+            f"{PAYPAL_BASE}/v1/oauth2/token",
+            auth=(PAYPAL_CLIENT_ID, PAYPAL_SECRET),
+            headers={"Accept": "application/json", "Accept-Language": "en_US"},
+            data={"grant_type": "client_credentials"},
+        )
+    if resp.status_code != 200:
+        logger.error("PayPal OAuth failed: %s %s", resp.status_code, resp.text[:300])
+        raise HTTPException(status_code=502, detail="PayPal authentication failed")
+    return resp.json()["access_token"]
+
+
+class PayPalCreateOrder(BaseModel):
+    product_id: str
+    sponsor_inquiry_id: Optional[str] = None
+    sponsor_email: Optional[str] = None
+    sponsor_name: Optional[str] = None
+
+
+@api_router.post("/paypal/create-order")
+async def paypal_create_order(
+    body: PayPalCreateOrder,
+    request: Request,
+    user: Optional[User] = Depends(_get_optional_user),
+):
+    if not ENABLE_PAYPAL_CHECKOUT:
+        raise HTTPException(status_code=503, detail="PayPal checkout is currently disabled")
+
+    product = STRIPE_PRODUCTS.get(body.product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Unknown product")
+
+    if product.get("auth_required") and not user:
+        raise HTTPException(status_code=401, detail="Login required for this purchase")
+
+    amount_str = f"{product['amount']:.2f}"
+    currency = product["currency"].upper()
+
+    access = await _paypal_access_token()
+    order_payload = {
+        "intent": "CAPTURE",
+        "purchase_units": [{
+            "reference_id": body.product_id,
+            "description": product["description"][:127],
+            "amount": {"currency_code": currency, "value": amount_str},
+        }],
+        "application_context": {
+            "brand_name": "MaxCoach · Hidden Genius Labs",
+            "shipping_preference": "NO_SHIPPING",
+            "user_action": "PAY_NOW",
+        },
+    }
+    async with httpx.AsyncClient(timeout=20) as ax:
+        resp = await ax.post(
+            f"{PAYPAL_BASE}/v2/checkout/orders",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {access}",
+                "PayPal-Request-Id": str(uuid.uuid4()),  # idempotency
+            },
+            json=order_payload,
+        )
+    if resp.status_code not in (200, 201):
+        logger.error("PayPal create-order failed: %s %s", resp.status_code, resp.text[:500])
+        raise HTTPException(status_code=502, detail="PayPal order creation failed")
+    order = resp.json()
+    order_id = order["id"]
+
+    # Persist a pending transaction — uses session_id field for compat with _credit_transaction
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": order_id,         # PayPal order id slots into the same field
+        "provider": "paypal",
+        "product_id": body.product_id,
+        "kind": product["kind"],
+        "target": product["target"],
+        "amount": product["amount"],
+        "currency": product["currency"],
+        "user_id": user.user_id if user else None,
+        "user_email": user.email if user else None,
+        "sponsor_inquiry_id": body.sponsor_inquiry_id,
+        "metadata": {
+            "user_id": user.user_id if user else None,
+            "user_email": user.email if user else None,
+            "sponsor_inquiry_id": body.sponsor_inquiry_id,
+            "sponsor_email": body.sponsor_email,
+            "sponsor_name": body.sponsor_name,
+        },
+        "payment_status": "pending",
+        "credited": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"order_id": order_id}
+
+
+class PayPalCaptureOrder(BaseModel):
+    order_id: str
+
+
+@api_router.post("/paypal/capture-order")
+async def paypal_capture_order(body: PayPalCaptureOrder):
+    if not ENABLE_PAYPAL_CHECKOUT:
+        raise HTTPException(status_code=503, detail="PayPal checkout is currently disabled")
+
+    tx = await db.payment_transactions.find_one({"session_id": body.order_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # If already credited, return idempotent success
+    if tx.get("credited"):
+        return {"ok": True, "already_credited": True, "product_id": tx.get("product_id"), "amount": tx.get("amount")}
+
+    access = await _paypal_access_token()
+    async with httpx.AsyncClient(timeout=20) as ax:
+        resp = await ax.post(
+            f"{PAYPAL_BASE}/v2/checkout/orders/{body.order_id}/capture",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {access}",
+                "PayPal-Request-Id": f"capture-{body.order_id}",
+            },
+        )
+    if resp.status_code not in (200, 201):
+        # 422 with INSTRUMENT_DECLINED etc. — surface clean error to user
+        try:
+            err_data = resp.json()
+        except Exception:
+            err_data = {"raw": resp.text[:300]}
+        logger.error("PayPal capture failed: %s %s", resp.status_code, err_data)
+        await db.payment_transactions.update_one(
+            {"session_id": body.order_id},
+            {"$set": {"payment_status": "failed", "last_error": str(err_data)[:500]}},
+        )
+        raise HTTPException(status_code=502, detail="Payment capture failed")
+
+    capture = resp.json()
+    status = capture.get("status", "UNKNOWN")
+    paypal_capture_id = None
+    try:
+        paypal_capture_id = capture["purchase_units"][0]["payments"]["captures"][0]["id"]
+    except Exception:
+        pass
+
+    if status == "COMPLETED":
+        await db.payment_transactions.update_one(
+            {"session_id": body.order_id},
+            {"$set": {
+                "payment_status": "paid",
+                "paypal_capture_id": paypal_capture_id,
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        fresh = await db.payment_transactions.find_one({"session_id": body.order_id}, {"_id": 0})
+        if fresh:
+            await _credit_transaction(fresh)
+        return {"ok": True, "already_credited": False, "product_id": tx.get("product_id"), "amount": tx.get("amount")}
+    else:
+        await db.payment_transactions.update_one(
+            {"session_id": body.order_id},
+            {"$set": {"payment_status": status.lower()}},
+        )
+        return {"ok": False, "status": status}
+
+
+@api_router.get("/paypal/config")
+async def paypal_config():
+    """Public — used by frontend to load PayPal SDK with the correct client_id + env."""
+    return {
+        "enabled": ENABLE_PAYPAL_CHECKOUT and bool(PAYPAL_CLIENT_ID),
+        "client_id": PAYPAL_CLIENT_ID if ENABLE_PAYPAL_CHECKOUT else None,
+        "env": PAYPAL_ENV,
+        "currency": "USD",
+    }
+
+
+# -----------------------------
 # Aquidneck Island Free Books campaign — public landing capture
 # -----------------------------
 class AquidneckClaim(BaseModel):
