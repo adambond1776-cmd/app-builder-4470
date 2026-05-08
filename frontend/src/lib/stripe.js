@@ -2,8 +2,8 @@
 // Product catalog lives server-side; frontend only sends product_id + origin.
 //
 // Feature-flag aware: if backend reports ENABLE_STRIPE_CHECKOUT=False, the
-// client-side helper short-circuits with a friendly notice instead of opening
-// Stripe. PayPal will replace these buttons one surface at a time.
+// client-side helper either routes to the PayPal pricing flow or short-circuits
+// with a friendly notice instead of opening Stripe.
 import { apiJSON } from "./api";
 
 let _flagsCache = null;
