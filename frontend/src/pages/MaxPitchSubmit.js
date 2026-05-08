@@ -101,10 +101,22 @@ export default function MaxPitchSubmit({ onBack, onSubmitted }) {
         <button onClick={onBack} data-testid="pitch-back-btn" className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "hsl(220,30%,14%)", border: "1px solid hsl(220,30%,22%)", color: "hsl(210,20%,85%)" }}>
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <div>
+        <div className="flex-1">
           <div className="font-black" style={{ color: "hsl(210,20%,95%)" }}>Max Pitch · {isFull ? "Waitlist" : "Submit"}</div>
           <div className="text-xs" style={{ color: "hsl(220,15%,50%)" }}>{round?.name}</div>
         </div>
+        <a
+          href="/teachers"
+          data-testid="pitch-submit-teacher-hub-link"
+          className="text-[10px] sm:text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-full no-underline whitespace-nowrap"
+          style={{
+            background: "hsla(280,80%,55%,0.16)",
+            color: "hsl(280,80%,80%)",
+            border: "1px solid hsla(280,80%,55%,0.4)",
+          }}
+        >
+          🔨 Vote teachers
+        </a>
       </div>
 
       <div className="px-5 py-5 space-y-5">

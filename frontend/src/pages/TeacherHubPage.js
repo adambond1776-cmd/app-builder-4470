@@ -61,6 +61,30 @@ export default function TeacherHubPage() {
     document.title = "Teacher Hub · MaxCoach";
     reload();
     apiJSON("/auth/me").then(setMe).catch(() => setMe(null));
+
+    // Real-time vote sync: re-poll the public list every 12s so vote counts +
+    // leaderboard order stay live across browsers without a manual refresh.
+    // Pauses while the tab is hidden to save bandwidth, resumes on focus.
+    let interval = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(reload, 12000);
+    };
+    const stop = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+    const onVis = () => (document.hidden ? stop() : start());
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", start);
+    window.addEventListener("blur", stop);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", start);
+      window.removeEventListener("blur", stop);
+    };
   }, []);
 
   const handleVote = async (teacherId) => {
@@ -297,12 +321,19 @@ export default function TeacherHubPage() {
               )}
             </div>
             <p
-              className="text-xs leading-relaxed mb-4"
-              style={{ color: "hsl(220,15%,70%)" }}
+              className="text-xs leading-relaxed mb-1"
+              style={{ color: "hsl(210,20%,90%)" }}
+              data-testid="teacher-hub-vote-explainer"
             >
-              Students and teachers each get one vote per teacher. The top voices
-              shape the toolkit that amplifies what students learn through the
-              Coach App.
+              <strong>Vote for the teacher you want to help build the toolkit
+              that will amplify Coach App learning.</strong>
+            </p>
+            <p
+              className="text-[11px] leading-relaxed mb-4"
+              style={{ color: "hsl(220,15%,65%)" }}
+            >
+              Students and teachers each get one vote per teacher. Counts update
+              live across all browsers. Toggle your pick anytime — no lock-in.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

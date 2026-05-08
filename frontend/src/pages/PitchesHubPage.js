@@ -246,6 +246,59 @@ export default function PitchesHubPage() {
         </div>
       </div>
 
+      {/* Teacher Hub bridge — links over to the toolkit-builder vote.
+          Additive only — the original /pitches surface above is untouched. */}
+      <a
+        href="/teachers"
+        data-testid="pitches-hub-teacher-hub-link"
+        className="block mx-5 mb-5 p-4 sm:p-5 rounded-2xl no-underline transition-all hover:scale-[1.005]"
+        style={{
+          background:
+            "linear-gradient(135deg, hsla(280,80%,55%,0.14), hsla(40,90%,55%,0.08))",
+          border: "1px solid hsla(280,80%,55%,0.3)",
+          color: "inherit",
+        }}
+      >
+        <div className="flex items-center gap-4">
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+            style={{
+              background:
+                "linear-gradient(135deg, hsl(280,80%,55%), hsl(40,90%,55%))",
+            }}
+          >
+            🔨
+          </div>
+          <div className="flex-1 min-w-0">
+            <div
+              className="text-[10px] font-bold uppercase tracking-widest mb-0.5"
+              style={{ color: "hsl(280,80%,80%)" }}
+            >
+              Toolkit Builder Vote · Live
+            </div>
+            <div
+              className="font-black text-sm sm:text-base leading-tight"
+              style={{ color: "hsl(210,20%,95%)" }}
+            >
+              Meet our teachers & vote for the toolkit builder →
+            </div>
+            <div
+              className="text-[11px] sm:text-xs mt-1 leading-relaxed"
+              style={{ color: "hsl(220,15%,72%)" }}
+            >
+              Help pick the teacher who'll shape the toolkit that amplifies what
+              you learn through the Coach App. One vote per teacher.
+            </div>
+          </div>
+          <div
+            className="text-xs font-bold whitespace-nowrap hidden sm:block"
+            style={{ color: "hsl(40,90%,72%)" }}
+          >
+            Open hub →
+          </div>
+        </div>
+      </a>
+
       {/* Controls */}
       <div
         className="sticky top-0 z-10 px-5 py-3 flex flex-col gap-2"
