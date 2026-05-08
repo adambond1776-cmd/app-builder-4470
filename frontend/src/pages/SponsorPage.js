@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiJSON, apiFetch } from "../lib/api";
 import { startCheckout } from "../lib/stripe";
+import PayPalCheckoutButton from "../components/PayPalCheckoutButton";
 
 const BUDGET_TIERS = [
   { id: "under_10k", label: "Under $10K" },
@@ -57,10 +58,18 @@ export default function SponsorPage() {
   const [err, setErr] = useState(null);
   const [showFormError, setShowFormError] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(null); // tier id while loading
+  const [flags, setFlags] = useState(null);
+  const [boughtTier, setBoughtTier] = useState(null);
 
   useEffect(() => {
     apiJSON("/pitch/public-stats").then(setStats).catch(() => {});
+    apiJSON("/public-config")
+      .then((f) => setFlags(f || {}))
+      .catch(() => setFlags({ enable_stripe_checkout: false, enable_paypal_checkout: false }));
   }, []);
+
+  const stripeLive = !!flags?.enable_stripe_checkout;
+  const paypalLive = !!flags?.enable_paypal_checkout;
 
   const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -75,10 +84,10 @@ export default function SponsorPage() {
   const buyTier = async (productId, tierId) => {
     if (checkoutLoading) return;
     // Soft pre-flight: capture the prospect's email + company by routing them through the form first
-    // if they haven't filled it in. This way we have a follow-up trail if Stripe checkout is abandoned.
+    // if they haven't filled it in. This way we have a follow-up trail if checkout is abandoned.
     if (!form.name.trim() || !form.email.trim() || !form.company.trim()) {
       setCheckoutLoading(null);
-      const msg = `Quick step before Stripe — fill in your name, company, and email below. We'll open the ${
+      const msg = `Quick step before checkout — fill in your name, company, and email below. We'll open the ${
         tierId === "spotlight" ? "Spotlight" : "Anchor"
       } checkout right after.`;
       setErr(msg);
@@ -122,6 +131,48 @@ export default function SponsorPage() {
       setErr(e.message || "Couldn't start checkout");
       setCheckoutLoading(null);
     }
+  };
+
+  const prepareSponsorPayPalExtras = async (tierId) => {
+    if (!form.name.trim() || !form.email.trim() || !form.company.trim()) {
+      const msg = `Quick step before checkout — fill in your name, company, and email below. We'll open the ${
+        tierId === "spotlight" ? "Spotlight" : "Anchor"
+      } checkout right after.`;
+      setErr(msg);
+      setShowFormError(true);
+      const formEl = document.querySelector('[data-testid="sponsor-form"]');
+      if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => setShowFormError(false), 8000);
+      throw new Error(msg);
+    }
+
+    setErr(null);
+    setShowFormError(false);
+    let inquiryId = null;
+    try {
+      const inq = await apiFetch("/sponsor/inquire", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          company: form.company.trim(),
+          email: form.email.trim(),
+          role: form.role.trim() || null,
+          budget_tier: tierId === "anchor" ? "50k_plus" : "10k_50k",
+          round_interest: form.round_interest.trim() || null,
+          message: `[${tierId.toUpperCase()} PAYPAL CHECKOUT INITIATED] ${form.message.trim() || "Direct tier purchase from /sponsor page."}`,
+        }),
+      });
+      const inqData = await inq.json().catch(() => ({}));
+      inquiryId = inqData?.inquiry_id || null;
+    } catch {
+      // Non-blocking: PayPal can still create the order with the prospect email/name.
+    }
+
+    return {
+      sponsor_email: form.email.trim(),
+      sponsor_name: form.name.trim(),
+      sponsor_inquiry_id: inquiryId || undefined,
+    };
   };
 
   const submit = async () => {
@@ -400,18 +451,74 @@ export default function SponsorPage() {
                 ))}
               </ul>
               {t.product_id ? (
-                <button
-                  onClick={() => buyTier(t.product_id, t.id)}
-                  disabled={checkoutLoading === t.id}
-                  data-testid={`sponsor-tier-buy-${t.id}`}
-                  className="w-full mt-4 py-3 rounded-xl font-bold text-sm disabled:opacity-50"
-                  style={{
-                    background: `linear-gradient(135deg, ${t.accent}, ${t.accent.replace(",60%)", ",48%)").replace(",55%)", ",43%)")})`,
-                    color: "white",
-                  }}
-                >
-                  {checkoutLoading === t.id ? "Opening Stripe…" : `Sponsor for ${t.price} →`}
-                </button>
+                paypalLive ? (
+                  boughtTier === t.id ? (
+                    <div
+                      data-testid={`sponsor-tier-bought-${t.id}`}
+                      className="w-full mt-4 py-3 rounded-xl text-center text-sm font-bold"
+                      style={{
+                        background: "hsla(142,71%,45%,0.15)",
+                        color: "hsl(142,71%,75%)",
+                        border: "1px solid hsla(142,71%,45%,0.4)",
+                      }}
+                    >
+                      ✓ Sponsor checkout complete — we'll follow up by email
+                    </div>
+                  ) : (
+                    <div className="mt-4 space-y-2">
+                      <div className="text-[11px]" style={{ color: "hsl(220,15%,62%)" }}>
+                        Sponsor for {t.price} with PayPal
+                      </div>
+                      <PayPalCheckoutButton
+                        productId={t.product_id}
+                        testIdSuffix={`sponsor-${t.id}`}
+                        getExtras={() => prepareSponsorPayPalExtras(t.id)}
+                        onApproved={() => {
+                          setBoughtTier(t.id);
+                          setErr(null);
+                        }}
+                        onError={(msg) => setErr(msg)}
+                      />
+                    </div>
+                  )
+                ) : flags === null ? (
+                  <div
+                    data-testid={`sponsor-tier-checkout-loading-${t.id}`}
+                    className="w-full mt-4 py-3 rounded-xl text-center text-xs"
+                    style={{
+                      background: "hsla(220,30%,18%,0.4)",
+                      color: "hsl(220,15%,60%)",
+                      border: "1px dashed hsl(220,30%,28%)",
+                    }}
+                  >
+                    Loading checkout…
+                  </div>
+                ) : !stripeLive ? (
+                  <div
+                    data-testid={`sponsor-tier-checkout-unavailable-${t.id}`}
+                    className="w-full mt-4 py-3 rounded-xl text-center text-xs font-bold"
+                    style={{
+                      background: "hsla(220,30%,18%,0.5)",
+                      color: "hsl(220,15%,70%)",
+                      border: "1px dashed hsl(220,30%,28%)",
+                    }}
+                  >
+                    Checkout is temporarily unavailable — send the form below.
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => buyTier(t.product_id, t.id)}
+                    disabled={checkoutLoading === t.id}
+                    data-testid={`sponsor-tier-buy-${t.id}`}
+                    className="w-full mt-4 py-3 rounded-xl font-bold text-sm disabled:opacity-50"
+                    style={{
+                      background: `linear-gradient(135deg, ${t.accent}, ${t.accent.replace(",60%)", ",48%)").replace(",55%)", ",43%)")})`,
+                      color: "white",
+                    }}
+                  >
+                    {checkoutLoading === t.id ? "Opening checkout…" : `Sponsor for ${t.price} →`}
+                  </button>
+                )
               ) : (
                 <button
                   onClick={() => {

@@ -299,7 +299,7 @@ async def public_config():
     """Public flags the frontend reads on boot. Safe — no secrets, no PII."""
     return {
         "enable_stripe_checkout": ENABLE_STRIPE_CHECKOUT,
-        "enable_paypal_checkout": ENABLE_PAYPAL_CHECKOUT,
+        "enable_paypal_checkout": ENABLE_PAYPAL_CHECKOUT and bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET),
     }
 
 
@@ -2779,9 +2779,10 @@ async def paypal_capture_order(body: PayPalCaptureOrder):
 @api_router.get("/paypal/config")
 async def paypal_config():
     """Public — used by frontend to load PayPal SDK with the correct client_id + env."""
+    configured = ENABLE_PAYPAL_CHECKOUT and bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET)
     return {
-        "enabled": ENABLE_PAYPAL_CHECKOUT and bool(PAYPAL_CLIENT_ID),
-        "client_id": PAYPAL_CLIENT_ID if ENABLE_PAYPAL_CHECKOUT else None,
+        "enabled": configured,
+        "client_id": PAYPAL_CLIENT_ID if configured else None,
         "env": PAYPAL_ENV,
         "currency": "USD",
     }
