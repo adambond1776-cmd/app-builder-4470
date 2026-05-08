@@ -120,7 +120,7 @@ export default function SponsorPage() {
         const inqData = await inq.json().catch(() => ({}));
         inquiryId = inqData?.inquiry_id || null;
       } catch {
-        // non-blocking — the Stripe flow can still succeed
+        // non-blocking — hosted checkout can still succeed
       }
       await startCheckout(productId, {
         sponsor_email: form.email.trim(),

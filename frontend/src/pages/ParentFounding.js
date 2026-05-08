@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { apiJSON } from "../lib/api";
 import { startCheckout } from "../lib/stripe";
+import PayPalCheckoutButton from "../components/PayPalCheckoutButton";
 
 export default function ParentFounding({ onBack }) {
   const [status, setStatus] = useState(null);
@@ -9,15 +10,37 @@ export default function ParentFounding({ onBack }) {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState("pay");
+  const [flags, setFlags] = useState(null);
 
-  useEffect(() => { apiJSON("/family/founding-status").then(setStatus).catch(() => {}); }, []);
+  useEffect(() => {
+    apiJSON("/family/founding-status").then(setStatus).catch(() => {});
+    apiJSON("/public-config")
+      .then((f) => setFlags(f || {}))
+      .catch(() => setFlags({ enable_stripe_checkout: false, enable_paypal_checkout: false }));
+  }, []);
 
-  const lockWithStripe = async () => {
+  const stripeLive = !!flags?.enable_stripe_checkout;
+  const paypalLive = !!flags?.enable_paypal_checkout;
+  const checkoutProviderLabel = paypalLive ? "PayPal" : stripeLive ? "Stripe" : "our secure provider";
+
+  const lockWithCheckout = async () => {
     if (submitting) return;
     setSubmitting(true); setErr(null);
     try {
       await startCheckout("founding_family_lock");
     } catch (e) { setErr(e.message || "Couldn't start checkout"); setSubmitting(false); }
+  };
+
+  const refreshStatus = async () => {
+    try {
+      const s = await apiJSON("/family/founding-status");
+      setStatus(s);
+      setErr(null);
+    } catch (e) {
+      setErr(e.message || "Payment completed, but status refresh failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const signup = async () => {
@@ -96,10 +119,33 @@ export default function ParentFounding({ onBack }) {
               </button>
             </div>
 
-            <button onClick={mode === "pay" ? lockWithStripe : signup} disabled={!agree || submitting} data-testid="founding-lock-btn" className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40" style={{ background: mode === "pay" ? "linear-gradient(135deg, hsl(25,100%,55%), hsl(25,100%,45%))" : "hsl(220,30%,18%)", color: "white", boxShadow: agree && mode === "pay" ? "0 0 24px hsla(25,100%,55%,0.3)" : "none", border: mode === "waitlist" ? "1px solid hsl(220,30%,28%)" : "none" }}>
-              {submitting ? "…" : mode === "pay" ? `Pay $${status.founding_price} & lock now →` : "Add me to the waitlist"}
-            </button>
-            {mode === "pay" && <div className="text-[10px] text-center mt-2" style={{ color: "hsl(220,15%,40%)" }}>Secure checkout via Stripe · Founding rate locked for 1 year</div>}
+            {mode === "pay" && paypalLive ? (
+              <div className={!agree ? "opacity-40 pointer-events-none" : ""}>
+                <PayPalCheckoutButton
+                  productId="founding_family_lock"
+                  testIdSuffix="founding-family"
+                  disabled={!agree || submitting}
+                  onApproved={refreshStatus}
+                  onError={(msg) => {
+                    setErr(msg);
+                    setSubmitting(false);
+                  }}
+                />
+              </div>
+            ) : mode === "pay" && flags === null ? (
+              <div className="w-full py-4 rounded-2xl text-center text-xs" style={{ background: "hsla(220,30%,18%,0.4)", color: "hsl(220,15%,60%)", border: "1px dashed hsl(220,30%,28%)" }}>
+                Loading checkout…
+              </div>
+            ) : mode === "pay" && !stripeLive ? (
+              <div className="w-full py-4 rounded-2xl text-center text-xs font-bold" style={{ background: "hsla(220,30%,18%,0.5)", color: "hsl(220,15%,70%)", border: "1px dashed hsl(220,30%,28%)" }}>
+                Checkout is temporarily unavailable — use the waitlist option for now.
+              </div>
+            ) : (
+              <button onClick={mode === "pay" ? lockWithCheckout : signup} disabled={!agree || submitting} data-testid="founding-lock-btn" className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40" style={{ background: mode === "pay" ? "linear-gradient(135deg, hsl(25,100%,55%), hsl(25,100%,45%))" : "hsl(220,30%,18%)", color: "white", boxShadow: agree && mode === "pay" ? "0 0 24px hsla(25,100%,55%,0.3)" : "none", border: mode === "waitlist" ? "1px solid hsl(220,30%,28%)" : "none" }}>
+                {submitting ? "…" : mode === "pay" ? `Pay $${status.founding_price} & lock now →` : "Add me to the waitlist"}
+              </button>
+            )}
+            {mode === "pay" && <div className="text-[10px] text-center mt-2" style={{ color: "hsl(220,15%,40%)" }}>Secure checkout via {checkoutProviderLabel} · Founding rate locked for 1 year</div>}
           </>
         )}
       </div>

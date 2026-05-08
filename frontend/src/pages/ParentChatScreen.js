@@ -67,7 +67,7 @@ function UpgradeWall({ onFounding, onBack }) {
           color: "white",
         }}
       >
-        {boosting ? "Opening Stripe…" : "+200 messages · $2.99 →"}
+        {boosting ? "Opening checkout…" : "+200 messages · $2.99 →"}
       </button>
       <button
         onClick={onFounding}

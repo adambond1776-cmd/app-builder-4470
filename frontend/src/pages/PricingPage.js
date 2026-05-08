@@ -103,11 +103,11 @@ export default function PricingPage({ onBack }) {
       .catch(() => setFlags({ enable_stripe_checkout: false, enable_paypal_checkout: false }));
   }, []);
 
-  // Show the live Stripe buy button only when Stripe is on. PayPal buttons
-  // will render in their own conditional block once that integration ships.
+  // Render the active checkout provider based on backend flags.
   const stripeLive = !!flags?.enable_stripe_checkout;
   const paypalLive = !!flags?.enable_paypal_checkout;
   const checkoutReady = authChecked && flags !== null;
+  const checkoutProviderLabel = paypalLive ? "PayPal" : stripeLive ? "Stripe" : "our secure provider";
   const [bought, setBought] = useState(null); // { tierId, productId, amount }
 
   const handlePaypalApproved = (tierId, res) => {
@@ -385,7 +385,7 @@ export default function PricingPage({ onBack }) {
                   }}
                 >
                   {busy === t.id
-                    ? "Opening Stripe…"
+                    ? "Opening checkout…"
                     : !user && authChecked
                     ? `Sign in & lock $${t.price}/mo →`
                     : `Lock $${t.price}/mo →`}
@@ -459,7 +459,7 @@ export default function PricingPage({ onBack }) {
 
       {/* FAQ-ish trust strip */}
       <div className="px-5 pb-10 text-[11px] leading-relaxed" style={{ color: "hsl(220,15%,55%)" }}>
-        Secure checkout via Stripe. We never see your card. Cancel anytime before launch with a single email — no
+        Secure checkout via {checkoutProviderLabel}. We never see your card. Cancel anytime before launch with a single email — no
         questions asked. Built by Hidden Genius Labs LLC. Companion to <em>The Business of Life: Student Edition</em>{" "}
         by Adam Bond Devereau.
       </div>
