@@ -45,6 +45,12 @@ export async function isPaypalEnabled() {
 export async function startCheckout(product_id, extras = {}) {
   const flags = await getPaymentFlags();
   if (!flags.enable_stripe_checkout) {
+    if (flags.enable_paypal_checkout) {
+      const redirect = new URL("/pricing", window.location.origin);
+      redirect.searchParams.set("product", product_id);
+      window.location.href = redirect.toString();
+      return;
+    }
     throw new Error(
       "Payments are temporarily paused while we move to PayPal. Check back in a day or two — your spot is safe."
     );

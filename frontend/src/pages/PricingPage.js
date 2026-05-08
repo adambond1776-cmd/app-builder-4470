@@ -71,12 +71,27 @@ const SPONSOR_TEASE = {
   href: "/sponsor",
 };
 
+const PRODUCT_LABELS = {
+  booster_max_30: "Max booster",
+  booster_maya_30: "Maya booster",
+  booster_miles_30: "Miles booster",
+  founding_family_lock: "Founding Family Plan",
+  founding_miles_lock: "Founding Miles Academy",
+};
+
 export default function PricingPage({ onBack }) {
+  const [requestedProduct] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("product");
+    } catch {
+      return null;
+    }
+  });
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [busy, setBusy] = useState(null); // tier id while opening checkout
   const [err, setErr] = useState(null);
-  const [flags, setFlags] = useState({ enable_stripe_checkout: true, enable_paypal_checkout: false });
+  const [flags, setFlags] = useState(null);
 
   useEffect(() => {
     apiJSON("/auth/me")
@@ -85,13 +100,14 @@ export default function PricingPage({ onBack }) {
       .finally(() => setAuthChecked(true));
     apiJSON("/public-config")
       .then((f) => setFlags(f || {}))
-      .catch(() => {});
+      .catch(() => setFlags({ enable_stripe_checkout: false, enable_paypal_checkout: false }));
   }, []);
 
   // Show the live Stripe buy button only when Stripe is on. PayPal buttons
   // will render in their own conditional block once that integration ships.
-  const stripeLive = !!flags.enable_stripe_checkout;
-  const paypalLive = !!flags.enable_paypal_checkout;
+  const stripeLive = !!flags?.enable_stripe_checkout;
+  const paypalLive = !!flags?.enable_paypal_checkout;
+  const checkoutReady = authChecked && flags !== null;
   const [bought, setBought] = useState(null); // { tierId, productId, amount }
 
   const handlePaypalApproved = (tierId, res) => {
@@ -178,6 +194,19 @@ export default function PricingPage({ onBack }) {
 
       {/* Tiers */}
       <div className="px-5 pb-6 space-y-4">
+        {requestedProduct && PRODUCT_LABELS[requestedProduct] && (
+          <div
+            data-testid="pricing-payment-redirect-note"
+            className="p-3 rounded-xl text-xs"
+            style={{
+              background: "hsla(213,100%,55%,0.1)",
+              border: "1px solid hsla(213,100%,55%,0.3)",
+              color: "hsl(213,100%,78%)",
+            }}
+          >
+            Complete your {PRODUCT_LABELS[requestedProduct]} checkout with PayPal below.
+          </div>
+        )}
         {TIERS.map((t, i) => {
           const isHero = t.id === "family";
           return (
@@ -239,7 +268,19 @@ export default function PricingPage({ onBack }) {
                   </li>
                 ))}
               </ul>
-              {paypalLive ? (
+              {!checkoutReady ? (
+                <div
+                  data-testid={`pricing-checkout-loading-${t.id}`}
+                  className="w-full py-3.5 rounded-2xl text-center text-xs"
+                  style={{
+                    background: "hsla(220,30%,18%,0.4)",
+                    color: "hsl(220,15%,60%)",
+                    border: "1px dashed hsl(220,30%,28%)",
+                  }}
+                >
+                  Loading checkout…
+                </div>
+              ) : paypalLive ? (
                 t.product_id ? (
                   bought?.tierId === t.id ? (
                     <div
