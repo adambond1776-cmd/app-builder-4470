@@ -2903,8 +2903,171 @@ async def admin_aquidneck_signups(_: bool = Depends(require_admin)):
 
 
 # -----------------------------
-# App setup
+# Teacher Hub — public roster of teachers/coaches who want to be in the toolkit.
+# Completely isolated from Max Pitch. Uses a separate `teachers` collection.
+# Public profiles only appear on the hub after admin approval.
 # -----------------------------
+TEACHER_EXPERTISE_OPTIONS = [
+    "video_production",
+    "coaching",
+    "ai_tools",
+    "writing",
+    "college_prep",
+    "entrepreneurship",
+    "mental_health",
+    "fitness_health",
+    "music",
+    "art_design",
+    "stem",
+    "languages",
+    "trades",
+    "other",
+]
+
+
+class TeacherApplyRequest(BaseModel):
+    name: str
+    email: str
+    bio: str
+    expertise: List[str]
+    why_great: str
+    photo_url: Optional[str] = None
+    other_expertise: Optional[str] = None
+
+
+class TeacherUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    expertise: Optional[List[str]] = None
+    why_great: Optional[str] = None
+    photo_url: Optional[str] = None
+    other_expertise: Optional[str] = None
+
+
+def _validate_teacher_payload(name: str, bio: str, why_great: str, expertise: List[str]) -> None:
+    name = (name or "").strip()
+    bio = (bio or "").strip()
+    why_great = (why_great or "").strip()
+    if not name or len(name) < 2:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="Name too long (max 120 chars)")
+    if not bio or len(bio) < 30:
+        raise HTTPException(status_code=400, detail="Bio is too short (min 30 chars)")
+    if len(bio) > 1500:
+        raise HTTPException(status_code=400, detail="Bio too long (max 1500 chars)")
+    if not why_great or len(why_great) < 30:
+        raise HTTPException(status_code=400, detail="'Why I'm great' is too short (min 30 chars)")
+    if len(why_great) > 600:
+        raise HTTPException(status_code=400, detail="'Why I'm great' too long (max 600 chars)")
+    if not expertise or not isinstance(expertise, list):
+        raise HTTPException(status_code=400, detail="Pick at least one expertise tag")
+    invalid = [e for e in expertise if e not in TEACHER_EXPERTISE_OPTIONS]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid expertise tag(s): {invalid}")
+
+
+@api_router.get("/teachers")
+async def teachers_list_public():
+    """Public hub — only approved teachers."""
+    items = await db.teachers.find(
+        {"status": "approved"},
+        {"_id": 0, "email": 0, "source_ip": 0, "user_agent": 0},
+    ).sort("approved_at", -1).to_list(500)
+    return {"teachers": items, "total": len(items), "expertise_options": TEACHER_EXPERTISE_OPTIONS}
+
+
+@api_router.post("/teachers/apply")
+async def teachers_apply(body: TeacherApplyRequest, request: Request):
+    """Public application — creates a pending teacher profile."""
+    name = body.name.strip()[:120]
+    email = (body.email or "").strip().lower()[:200]
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Valid email required")
+    bio = body.bio.strip()[:1500]
+    why_great = body.why_great.strip()[:600]
+    expertise = body.expertise or []
+    _validate_teacher_payload(name, bio, why_great, expertise)
+
+    photo_url = (body.photo_url or "").strip()[:500] or None
+    if photo_url and not photo_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="photo_url must be http(s)")
+
+    other_expertise = (body.other_expertise or "").strip()[:120] or None
+
+    # De-dupe by email — let people update an existing pending application
+    existing = await db.teachers.find_one({"email": email}, {"_id": 0})
+    if existing and existing.get("status") == "approved":
+        raise HTTPException(status_code=409, detail="A profile with this email is already approved. Use the update endpoint.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.teachers.update_one(
+            {"email": email},
+            {"$set": {
+                "name": name,
+                "bio": bio,
+                "expertise": expertise,
+                "other_expertise": other_expertise,
+                "why_great": why_great,
+                "photo_url": photo_url,
+                "status": "pending",
+                "updated_at": now,
+            }},
+        )
+        return {"ok": True, "id": existing["id"], "status": "pending", "updated": True}
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "email": email,
+        "bio": bio,
+        "expertise": expertise,
+        "other_expertise": other_expertise,
+        "why_great": why_great,
+        "photo_url": photo_url,
+        "status": "pending",
+        "source_ip": request.client.host if request.client else None,
+        "user_agent": request.headers.get("user-agent", "")[:300] or None,
+        "created_at": now,
+    }
+    await db.teachers.insert_one(doc)
+    return {"ok": True, "id": doc["id"], "status": "pending", "updated": False}
+
+
+@api_router.get("/admin/teachers")
+async def admin_teachers_list(_: bool = Depends(require_admin)):
+    items = await db.teachers.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    by_status = {}
+    for it in items:
+        s = it.get("status") or "unknown"
+        by_status[s] = by_status.get(s, 0) + 1
+    return {"teachers": items, "total": len(items), "by_status": by_status}
+
+
+class TeacherStatusUpdate(BaseModel):
+    status: Literal["approved", "rejected", "pending"]
+
+
+@api_router.post("/admin/teachers/{teacher_id}/status")
+async def admin_teacher_set_status(
+    teacher_id: str, body: TeacherStatusUpdate, _: bool = Depends(require_admin)
+):
+    teacher = await db.teachers.find_one({"id": teacher_id}, {"_id": 0})
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    update = {"status": body.status, "status_updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.status == "approved" and not teacher.get("approved_at"):
+        update["approved_at"] = datetime.now(timezone.utc).isoformat()
+    await db.teachers.update_one({"id": teacher_id}, {"$set": update})
+    return {"ok": True, "status": body.status}
+
+
+# Optional: extend role vocabulary (non-breaking — existing 'kid' / 'parent' roles untouched)
+ROLE_TEACHER = "teacher"
+ROLE_STUDENT = "student"  # alias surfaced for clarity; existing 'kid' role keeps working
+
+
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,

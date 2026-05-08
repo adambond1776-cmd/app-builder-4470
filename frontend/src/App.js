@@ -31,6 +31,7 @@ import SponsorPage from "./pages/SponsorPage";
 import PaymentReturn from "./pages/PaymentReturn";
 import PricingPage from "./pages/PricingPage";
 import AquidneckLanding from "./pages/AquidneckLanding";
+import TeacherHubPage from "./pages/TeacherHubPage";
 import { apiJSON } from "./lib/api";
 import "./App.css";
 
@@ -44,6 +45,7 @@ function parsePath() {
   if (pathname === "/sponsor") return { type: "sponsor" };
   if (pathname === "/pricing") return { type: "pricing" };
   if (pathname === "/aquidneck" || pathname === "/free-books" || pathname === "/free" || pathname === "/free-aquidneck-books" || pathname === "/rhode-island-seniors-free-books") return { type: "aquidneck" };
+  if (pathname === "/teachers" || pathname === "/teacher-hub") return { type: "teacher_hub" };
   if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");
@@ -130,6 +132,13 @@ export default function App() {
     return (
       <div className="min-h-screen w-full" data-testid="app-root">
         <AquidneckLanding />
+      </div>
+    );
+  }
+  if (route.type === "teacher_hub") {
+    return (
+      <div className="min-h-screen w-full" data-testid="app-root">
+        <TeacherHubPage />
       </div>
     );
   }
