@@ -41,16 +41,66 @@ const EXPERTISE_COLORS = {
 
 export default function TeacherHubPage() {
   const [teachers, setTeachers] = useState(null);
+  const [viewerCanVote, setViewerCanVote] = useState(false);
+  const [me, setMe] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showApply, setShowApply] = useState(false);
+  const [voting, setVoting] = useState({}); // { [teacherId]: true } while in flight
+  const [voteErr, setVoteErr] = useState(null);
+
+  const reload = () =>
+    apiJSON("/teachers")
+      .then((res) => {
+        setTeachers(res.teachers || []);
+        setViewerCanVote(!!res.viewer_can_vote);
+      })
+      .catch(() => setTeachers([]));
 
   useEffect(() => {
     document.title = "Teacher Hub · MaxCoach";
-    apiJSON("/teachers")
-      .then((res) => setTeachers(res.teachers || []))
-      .catch(() => setTeachers([]));
+    reload();
+    apiJSON("/auth/me").then(setMe).catch(() => setMe(null));
   }, []);
+
+  const handleVote = async (teacherId) => {
+    if (!viewerCanVote) {
+      setVoteErr("Sign in to vote for the toolkit builder.");
+      setTimeout(() => setVoteErr(null), 4000);
+      return;
+    }
+    if (voting[teacherId]) return;
+    setVoting((v) => ({ ...v, [teacherId]: true }));
+    setVoteErr(null);
+    // Optimistic update
+    setTeachers((prev) =>
+      (prev || []).map((t) =>
+        t.id === teacherId
+          ? { ...t, has_voted: !t.has_voted, vote_count: (t.vote_count || 0) + (t.has_voted ? -1 : 1) }
+          : t
+      )
+    );
+    try {
+      const res = await apiJSON(`/teachers/${teacherId}/vote`, { method: "POST" });
+      // Reconcile with the truth from server
+      setTeachers((prev) =>
+        (prev || []).map((t) =>
+          t.id === teacherId ? { ...t, vote_count: res.vote_count, has_voted: res.has_voted } : t
+        )
+      );
+    } catch (e) {
+      // Roll back optimistic on failure
+      reload();
+      setVoteErr(e.message || "Couldn't record your vote. Try again.");
+      setTimeout(() => setVoteErr(null), 4000);
+    } finally {
+      setVoting((v) => {
+        const next = { ...v };
+        delete next[teacherId];
+        return next;
+      });
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!teachers) return [];
@@ -202,6 +252,145 @@ export default function TeacherHubPage() {
         </div>
       </section>
 
+      {/* LEADERBOARD — shows top 3 by vote count */}
+      {teachers && teachers.length > 0 && (
+        <section className="max-w-5xl mx-auto px-5 pb-2" data-testid="teacher-leaderboard">
+          <div
+            className="p-5 sm:p-6 rounded-3xl mb-6"
+            style={{
+              background:
+                "linear-gradient(135deg, hsla(40,90%,55%,0.10), hsla(280,80%,55%,0.06))",
+              border: "1px solid hsla(40,90%,55%,0.28)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🏆</span>
+                <div>
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: "hsl(40,90%,70%)" }}
+                  >
+                    Toolkit Builder Leaderboard
+                  </div>
+                  <div
+                    className="font-black text-base sm:text-lg leading-tight"
+                    style={{ color: "hsl(210,20%,95%)" }}
+                  >
+                    Vote for who should build the toolkit.
+                  </div>
+                </div>
+              </div>
+              {!viewerCanVote && (
+                <a
+                  href="/"
+                  data-testid="teacher-leaderboard-signin-link"
+                  className="text-[11px] font-bold px-3 py-1.5 rounded-full no-underline whitespace-nowrap"
+                  style={{
+                    background: "hsla(213,100%,55%,0.18)",
+                    color: "hsl(213,100%,80%)",
+                    border: "1px solid hsla(213,100%,55%,0.4)",
+                  }}
+                >
+                  Sign in to vote
+                </a>
+              )}
+            </div>
+            <p
+              className="text-xs leading-relaxed mb-4"
+              style={{ color: "hsl(220,15%,70%)" }}
+            >
+              Students and teachers each get one vote per teacher. The top voices
+              shape the toolkit that amplifies what students learn through the
+              Coach App.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[...teachers]
+                .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
+                .slice(0, 3)
+                .map((t, idx) => (
+                  <div
+                    key={t.id}
+                    data-testid={`leaderboard-row-${idx + 1}`}
+                    className="p-3 rounded-2xl flex items-center gap-3"
+                    style={{
+                      background: "hsl(220,30%,11%)",
+                      border:
+                        idx === 0
+                          ? "1px solid hsla(40,90%,55%,0.5)"
+                          : "1px solid hsl(220,30%,19%)",
+                    }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-black text-sm"
+                      style={{
+                        background:
+                          idx === 0
+                            ? "linear-gradient(135deg, hsl(40,90%,55%), hsl(25,95%,55%))"
+                            : idx === 1
+                            ? "hsl(220,15%,55%)"
+                            : "hsl(25,55%,45%)",
+                        color: "white",
+                      }}
+                    >
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="font-bold text-sm truncate"
+                        style={{ color: "hsl(210,20%,92%)" }}
+                      >
+                        {t.name}
+                      </div>
+                      <div
+                        className="text-[11px] truncate"
+                        style={{ color: "hsl(220,15%,60%)" }}
+                      >
+                        {(t.expertise || [])
+                          .map((e) => EXPERTISE_LABELS[e] || e)
+                          .slice(0, 2)
+                          .join(" · ") || "—"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div
+                        className="font-black text-base"
+                        style={{ color: "hsl(40,90%,70%)" }}
+                      >
+                        {t.vote_count || 0}
+                      </div>
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-widest"
+                        style={{ color: "hsl(220,15%,55%)" }}
+                      >
+                        votes
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Inline vote error toast */}
+      {voteErr && (
+        <div className="max-w-5xl mx-auto px-5">
+          <div
+            data-testid="teacher-vote-error"
+            className="p-3 rounded-xl text-xs mb-4"
+            style={{
+              background: "hsla(0,75%,55%,0.08)",
+              border: "1px solid hsla(0,75%,55%,0.3)",
+              color: "hsl(0,75%,82%)",
+            }}
+          >
+            {voteErr}
+          </div>
+        </div>
+      )}
+
       {/* Grid */}
       <section className="max-w-5xl mx-auto px-5 pb-16">
         {teachers === null ? (
@@ -248,7 +437,14 @@ export default function TeacherHubPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((t, i) => (
-              <TeacherCard key={t.id} teacher={t} index={i} />
+              <TeacherCard
+                key={t.id}
+                teacher={t}
+                index={i}
+                onVote={() => handleVote(t.id)}
+                voting={!!voting[t.id]}
+                viewerCanVote={viewerCanVote}
+              />
             ))}
           </div>
         )}
@@ -303,9 +499,11 @@ export default function TeacherHubPage() {
   );
 }
 
-function TeacherCard({ teacher, index }) {
+function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
   const expertise = teacher.expertise || [];
   const accent = EXPERTISE_COLORS[expertise[0]] || "hsl(280,80%,55%)";
+  const voteCount = teacher.vote_count || 0;
+  const hasVoted = !!teacher.has_voted;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -315,7 +513,9 @@ function TeacherCard({ teacher, index }) {
       className="p-5 rounded-2xl flex flex-col"
       style={{
         background: "hsl(220,30%,11%)",
-        border: "1px solid hsl(220,30%,19%)",
+        border: hasVoted
+          ? `1px solid ${accent}66`
+          : "1px solid hsl(220,30%,19%)",
         minHeight: "260px",
       }}
     >
@@ -343,10 +543,10 @@ function TeacherCard({ teacher, index }) {
         )}
         <div className="flex-1 min-w-0">
           <div
-            className="font-black text-base leading-tight"
+            className="font-black text-base leading-tight flex items-center gap-2"
             style={{ color: "hsl(210,20%,95%)" }}
           >
-            {teacher.name}
+            <span className="truncate">{teacher.name}</span>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             {expertise.slice(0, 2).map((e) => (
@@ -371,6 +571,25 @@ function TeacherCard({ teacher, index }) {
             )}
           </div>
         </div>
+        {/* Live vote count badge — top-right of card */}
+        <div
+          className="flex-shrink-0 flex flex-col items-center justify-center px-2.5 py-1 rounded-xl min-w-[44px]"
+          data-testid={`teacher-vote-count-${teacher.id}`}
+          style={{
+            background: "hsla(40,90%,55%,0.12)",
+            border: "1px solid hsla(40,90%,55%,0.32)",
+          }}
+        >
+          <div className="font-black text-base leading-none" style={{ color: "hsl(40,90%,72%)" }}>
+            {voteCount}
+          </div>
+          <div
+            className="text-[8px] font-bold uppercase tracking-widest mt-0.5"
+            style={{ color: "hsl(40,90%,60%)" }}
+          >
+            votes
+          </div>
+        </div>
       </div>
 
       <p
@@ -383,7 +602,7 @@ function TeacherCard({ teacher, index }) {
       </p>
 
       <div
-        className="mt-auto pt-3 border-t"
+        className="pt-3 border-t mb-3"
         style={{ borderColor: "hsl(220,30%,18%)" }}
       >
         <div
@@ -401,6 +620,52 @@ function TeacherCard({ teacher, index }) {
             : `"${teacher.why_great}"`}
         </p>
       </div>
+
+      {/* VOTE BUTTON — sticks to bottom of card */}
+      <button
+        type="button"
+        onClick={onVote}
+        disabled={voting}
+        data-testid={`teacher-vote-btn-${teacher.id}`}
+        aria-pressed={hasVoted}
+        className="mt-auto w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+        style={{
+          background: hasVoted
+            ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
+            : viewerCanVote
+            ? "hsla(40,90%,55%,0.16)"
+            : "hsl(220,30%,13%)",
+          border: hasVoted
+            ? `1px solid ${accent}aa`
+            : viewerCanVote
+            ? "1px solid hsla(40,90%,55%,0.4)"
+            : "1px solid hsl(220,30%,22%)",
+          color: hasVoted
+            ? "white"
+            : viewerCanVote
+            ? "hsl(40,90%,72%)"
+            : "hsl(220,15%,65%)",
+        }}
+      >
+        {voting ? (
+          "Saving…"
+        ) : hasVoted ? (
+          <>
+            <span>✓</span>
+            <span>Your toolkit-builder vote</span>
+          </>
+        ) : viewerCanVote ? (
+          <>
+            <span>🔨</span>
+            <span>Vote for Toolkit Builder</span>
+          </>
+        ) : (
+          <>
+            <span>🔒</span>
+            <span>Sign in to vote</span>
+          </>
+        )}
+      </button>
     </motion.div>
   );
 }

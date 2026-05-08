@@ -2968,13 +2968,121 @@ def _validate_teacher_payload(name: str, bio: str, why_great: str, expertise: Li
 
 
 @api_router.get("/teachers")
-async def teachers_list_public():
-    """Public hub — only approved teachers."""
+async def teachers_list_public(user: Optional[User] = Depends(_get_optional_user)):
+    """Public hub — only approved teachers, with vote counts and (if signed in) the user's own votes."""
     items = await db.teachers.find(
         {"status": "approved"},
         {"_id": 0, "email": 0, "source_ip": 0, "user_agent": 0},
-    ).sort("approved_at", -1).to_list(500)
-    return {"teachers": items, "total": len(items), "expertise_options": TEACHER_EXPERTISE_OPTIONS}
+    ).to_list(500)
+
+    # Aggregate vote counts in a single round-trip
+    teacher_ids = [t["id"] for t in items]
+    counts = {}
+    if teacher_ids:
+        pipeline = [
+            {"$match": {"teacher_id": {"$in": teacher_ids}}},
+            {"$group": {"_id": "$teacher_id", "n": {"$sum": 1}}},
+        ]
+        async for row in db.teacher_votes.aggregate(pipeline):
+            counts[row["_id"]] = row["n"]
+
+    # Pull this user's votes if signed in
+    my_votes = set()
+    if user:
+        async for v in db.teacher_votes.find(
+            {"user_id": user.user_id, "teacher_id": {"$in": teacher_ids}},
+            {"_id": 0, "teacher_id": 1},
+        ):
+            my_votes.add(v["teacher_id"])
+
+    for t in items:
+        t["vote_count"] = counts.get(t["id"], 0)
+        t["has_voted"] = t["id"] in my_votes
+
+    # Sort by votes desc, then by approved_at desc as tiebreaker
+    items.sort(
+        key=lambda x: (-x.get("vote_count", 0), x.get("approved_at") or "", x.get("created_at") or ""),
+        reverse=False,
+    )
+    # Re-sort with negative count handled (the lambda above puts higher counts first; secondary alpha keeps stable)
+    items.sort(key=lambda x: x.get("vote_count", 0), reverse=True)
+
+    return {
+        "teachers": items,
+        "total": len(items),
+        "expertise_options": TEACHER_EXPERTISE_OPTIONS,
+        "viewer_can_vote": user is not None,
+    }
+
+
+@api_router.post("/teachers/{teacher_id}/vote")
+async def teacher_toggle_vote(
+    teacher_id: str,
+    user: Optional[User] = Depends(_get_optional_user),
+):
+    """Authed-only — toggles the current user's vote for the given teacher.
+    One vote per (user_id, teacher_id) pair, enforced by unique index."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in to vote for the toolkit builder.")
+
+    teacher = await db.teachers.find_one({"id": teacher_id, "status": "approved"}, {"_id": 0, "id": 1})
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    existing = await db.teacher_votes.find_one(
+        {"user_id": user.user_id, "teacher_id": teacher_id}, {"_id": 0}
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.teacher_votes.delete_one({"user_id": user.user_id, "teacher_id": teacher_id})
+        action = "removed"
+    else:
+        await db.teacher_votes.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user.user_id,
+            "user_email": user.email,
+            "user_role": user.role,
+            "teacher_id": teacher_id,
+            "created_at": now,
+        })
+        action = "added"
+
+    new_count = await db.teacher_votes.count_documents({"teacher_id": teacher_id})
+    return {"ok": True, "action": action, "vote_count": new_count, "has_voted": action == "added"}
+
+
+@api_router.get("/teachers/leaderboard")
+async def teacher_leaderboard(limit: int = 10):
+    """Public leaderboard — top N approved teachers by vote count."""
+    limit = max(1, min(int(limit), 50))
+    items = await db.teachers.find(
+        {"status": "approved"},
+        {"_id": 0, "email": 0, "source_ip": 0, "user_agent": 0, "bio": 0, "why_great": 0,
+         "other_expertise": 0, "created_at": 0, "approved_at": 0, "status": 0,
+         "status_updated_at": 0, "updated_at": 0},
+    ).to_list(500)
+    if not items:
+        return {"leaderboard": [], "total_voters": 0}
+
+    teacher_ids = [t["id"] for t in items]
+    counts = {}
+    pipeline = [
+        {"$match": {"teacher_id": {"$in": teacher_ids}}},
+        {"$group": {"_id": "$teacher_id", "n": {"$sum": 1}}},
+    ]
+    async for row in db.teacher_votes.aggregate(pipeline):
+        counts[row["_id"]] = row["n"]
+    for t in items:
+        t["vote_count"] = counts.get(t["id"], 0)
+    items.sort(key=lambda x: x["vote_count"], reverse=True)
+
+    total_voters = await db.teacher_votes.distinct("user_id")
+    return {"leaderboard": items[:limit], "total_voters": len(total_voters)}
+
+
+# Optional: extend role vocabulary (non-breaking — existing 'kid' / 'parent' roles untouched)
+ROLE_TEACHER = "teacher"
+ROLE_STUDENT = "student"  # alias surfaced for clarity; existing 'kid' role keeps working
 
 
 @api_router.post("/teachers/apply")
@@ -3063,11 +3171,6 @@ async def admin_teacher_set_status(
     return {"ok": True, "status": body.status}
 
 
-# Optional: extend role vocabulary (non-breaking — existing 'kid' / 'parent' roles untouched)
-ROLE_TEACHER = "teacher"
-ROLE_STUDENT = "student"  # alias surfaced for clarity; existing 'kid' role keeps working
-
-
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
@@ -3085,6 +3188,15 @@ async def startup():
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     except Exception as e:
         logger.warning(f"TTL index create failed: {e}")
+
+    # One vote per (user, teacher) — race-condition safe enforcement at the DB level
+    try:
+        await db.teacher_votes.create_index(
+            [("user_id", 1), ("teacher_id", 1)], unique=True, name="uniq_user_teacher_vote"
+        )
+        await db.teacher_votes.create_index([("teacher_id", 1)], name="by_teacher")
+    except Exception as e:
+        logger.warning(f"teacher_votes index create failed: {e}")
 
 
 @app.on_event("shutdown")
