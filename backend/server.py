@@ -3182,8 +3182,7 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup():
+async def _ensure_indexes_background():
     # TTL index auto-expires old sessions so user_sessions doesn't grow forever
     try:
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
@@ -3198,6 +3197,11 @@ async def startup():
         await db.teacher_votes.create_index([("teacher_id", 1)], name="by_teacher")
     except Exception as e:
         logger.warning(f"teacher_votes index create failed: {e}")
+
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(_ensure_indexes_background())
 
 
 @app.on_event("shutdown")
