@@ -14,8 +14,6 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-
 from config import (
     MAIN_CHAT_MODEL, SUMMARY_MODEL, MAX_REPLY_TOKENS, SUMMARY_MAX_TOKENS,
     SUMMARY_EVERY_N_EXCHANGES, RAW_HISTORY_KEEP, DAILY_MESSAGE_CAP,
@@ -40,10 +38,28 @@ from config import (
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+client = AsyncIOMotorClient(
+    os.environ["MONGO_URL"],
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=10000,
+    socketTimeoutMS=20000,
+    minPoolSize=1,
+)
 db = client[os.environ["DB_NAME"]]
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+
+_LLM_SYMBOLS = None
+
+
+def get_llm_symbols():
+    """Import the heavy LLM SDK only when chat endpoints actually need it."""
+    global _LLM_SYMBOLS
+    if _LLM_SYMBOLS is None:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+        _LLM_SYMBOLS = (LlmChat, UserMessage)
+    return _LLM_SYMBOLS
 
 # Resend email config (optional — emails silently skip if key missing)
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
@@ -294,6 +310,11 @@ async def health():
     return {"ok": True, "time": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    return {"ok": True, "time": datetime.now(timezone.utc).isoformat()}
+
+
 @api_router.get("/public-config")
 async def public_config():
     """Public flags the frontend reads on boot. Safe — no secrets, no PII."""
@@ -449,6 +470,7 @@ async def reset_memory(user: User = Depends(get_current_user)):
 
 async def build_memory_card(user_id: str, existing: Optional[str], recent_turns: List[dict]) -> str:
     """Use Haiku to distill chat turns into a ~200 token Memory Card."""
+    LlmChat, UserMessage = get_llm_symbols()
     convo_text = "\n".join([f"{t['role']}: {t['content']}" for t in recent_turns])
     summary_prompt = (
         "You are Max's memory engine. Distill what you now know about this young person into a compact, structured note "
@@ -481,6 +503,7 @@ async def build_memory_card(user_id: str, existing: Optional[str], recent_turns:
 # -----------------------------
 @api_router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, user: User = Depends(get_current_user)):
+    LlmChat, UserMessage = get_llm_symbols()
     if not user.age_confirmed or not user.beta_consent:
         raise HTTPException(status_code=403, detail="Complete signup first")
     if not req.messages:
@@ -1137,6 +1160,7 @@ class ParentMemoryUpdate(BaseModel):
 
 async def build_parent_memory_card(user_id: str, existing: Optional[str], recent_turns: List[dict]) -> str:
     """Use Haiku to distill Maya chat turns into a ~200 token Parent Memory Card."""
+    LlmChat, UserMessage = get_llm_symbols()
     convo_text = "\n".join([f"{t['role']}: {t['content']}" for t in recent_turns])
     summary_prompt = (
         "You are Maya's memory engine. Distill what you now know about this parent into a compact, structured note "
@@ -1216,6 +1240,7 @@ def _require_onboarded(user: User):
 # -----------------------------
 @api_router.post("/family/chat", response_model=ParentChatResponse)
 async def family_chat(req: ParentChatRequest, user: User = Depends(get_current_user)):
+    LlmChat, UserMessage = get_llm_symbols()
     _require_parent(user)
     _require_onboarded(user)
     if not req.messages:
@@ -1821,6 +1846,7 @@ def _subject_hint(subject: Optional[str]) -> str:
 
 
 async def _build_miles_memory_card(user_id: str, existing: Optional[str], recent_turns: List[dict]) -> str:
+    LlmChat, UserMessage = get_llm_symbols()
     convo_text = "\n".join([f"{t['role']}: {t['content']}" for t in recent_turns])
     summary_prompt = (
         f"You are {MILES_BRAND_SHORT}'s memory engine. Distill what you now know about this learner into a compact academic note. "
@@ -1923,6 +1949,7 @@ async def miles_update_documentary(body: MilesDocumentaryUpdate, user: User = De
 
 @api_router.post("/miles/chat", response_model=MilesChatResponse)
 async def miles_chat(req: MilesChatRequest, user: User = Depends(get_current_user)):
+    LlmChat, UserMessage = get_llm_symbols()
     _require_onboarded(user)
     if not user.miles_persona:
         raise HTTPException(status_code=400, detail="Pick a Miles persona first")
@@ -3199,8 +3226,17 @@ async def _ensure_indexes_background():
         logger.warning(f"teacher_votes index create failed: {e}")
 
 
+async def _warm_mongo_connection():
+    try:
+        await asyncio.wait_for(db.command("ping"), timeout=5)
+        logger.info("MongoDB warmup ping OK")
+    except Exception as e:
+        logger.warning(f"MongoDB warmup ping skipped/failed: {e}")
+
+
 @app.on_event("startup")
 async def startup():
+    asyncio.create_task(_warm_mongo_connection())
     asyncio.create_task(_ensure_indexes_background())
 
 
