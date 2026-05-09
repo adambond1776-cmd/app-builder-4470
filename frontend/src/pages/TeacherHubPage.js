@@ -39,6 +39,24 @@ const EXPERTISE_COLORS = {
   other: "#94a3b8",
 };
 
+const PILOT_SCHOOLS = [
+  "Newport High School",
+  "Middletown High School",
+  "Portsmouth High School",
+  "Other Aquidneck Island school",
+];
+
+const TOOLKIT_TOOLS = [
+  "Weekly Architecture Review",
+  "Energy Audit",
+  "Signal Board",
+  "Operating Agreement",
+  "Presence Protocol",
+  "90-Day Foundation Sprint",
+  "Genius Mining Starter",
+  "Household / Advisory Check-In",
+];
+
 export default function TeacherHubPage() {
   const [teachers, setTeachers] = useState(null);
   const [viewerCanVote, setViewerCanVote] = useState(false);
@@ -187,7 +205,7 @@ export default function TeacherHubPage() {
                 background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
               }}
             >
-              Become a teacher
+              Apply as a builder
             </button>
           </div>
         </div>
@@ -206,7 +224,7 @@ export default function TeacherHubPage() {
           }}
         >
           <span style={{ color: "hsl(280,80%,75%)" }}>●</span>
-          Teacher Hub
+          Teacher Toolkit Builder
         </motion.div>
 
         <motion.h1
@@ -216,7 +234,7 @@ export default function TeacherHubPage() {
           className="font-black leading-[1.05] tracking-tight mb-4"
           style={{ fontSize: "clamp(2rem, 4.8vw, 3.4rem)", color: "hsl(210,20%,95%)" }}
         >
-          The humans behind the toolkit.
+          Help build the Teacher Toolkit.
         </motion.h1>
 
         <motion.p
@@ -226,10 +244,87 @@ export default function TeacherHubPage() {
           className="text-base sm:text-lg leading-relaxed mb-8"
           style={{ color: "hsl(220,15%,70%)", maxWidth: "44rem" }}
         >
-          Coaches, video pros, makers, and educators who teach inside MaxCoach.
-          Not influencers. Real people students will actually meet, work with, or
-          learn from.
+          We are giving <strong>The Business of Life: Student Edition</strong> to
+          juniors and seniors across Newport, Middletown, and Portsmouth — then
+          inviting local teachers to help turn the book's tools into a practical
+          school-ready system.
         </motion.p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8" data-testid="teacher-toolkit-pilot-stats">
+          {[
+            ["3 schools", "Newport, Middletown, Portsmouth"],
+            ["300 reviews", "Authentic student feedback in 30 days"],
+            ["1 toolkit", "Built with teachers, not handed down"],
+          ].map(([k, v]) => (
+            <div
+              key={k}
+              className="p-4 rounded-2xl"
+              style={{ background: "hsl(220,30%,12%)", border: "1px solid hsl(220,30%,19%)" }}
+            >
+              <div className="font-black text-lg" style={{ color: "hsl(210,20%,95%)" }}>{k}</div>
+              <div className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,65%)" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          className="p-5 sm:p-6 rounded-3xl mb-7"
+          style={{
+            background: "linear-gradient(135deg, hsla(213,100%,55%,0.12), hsla(142,70%,45%,0.06))",
+            border: "1px solid hsla(213,100%,55%,0.28)",
+          }}
+          data-testid="teacher-toolkit-builder-vision"
+        >
+          <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(213,100%,75%)" }}>
+            Student Edition → Teacher Toolkit
+          </div>
+          <h2 className="font-black text-xl sm:text-2xl mb-3" style={{ color: "hsl(210,20%,96%)" }}>
+            Students do not need another adult telling them to try harder.
+          </h2>
+          <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,75%)" }}>
+            They need adults who can help them build better systems: weekly reflection,
+            energy awareness, signal tracking, cleaner communication, presence, 90-day
+            growth sprints, and a way to mine the genius already hiding in how they think.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {TOOLKIT_TOOLS.map((tool) => (
+              <div
+                key={tool}
+                className="px-3 py-2 rounded-xl text-[11px] font-bold leading-tight"
+                style={{
+                  background: "hsla(220,30%,10%,0.55)",
+                  color: "hsl(210,20%,88%)",
+                  border: "1px solid hsl(220,30%,20%)",
+                }}
+              >
+                {tool}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mb-8">
+          <button
+            onClick={() => setShowApply(true)}
+            data-testid="teacher-toolkit-apply-hero"
+            className="flex-1 px-5 py-3 rounded-2xl font-bold text-sm text-white"
+            style={{ background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))" }}
+          >
+            Apply as a Teacher Builder →
+          </button>
+          <a
+            href="/free-aquidneck-books"
+            data-testid="teacher-toolkit-free-books-link"
+            className="flex-1 px-5 py-3 rounded-2xl font-bold text-sm text-center no-underline"
+            style={{
+              background: "hsla(142,70%,45%,0.12)",
+              color: "hsl(142,70%,75%)",
+              border: "1px solid hsla(142,70%,45%,0.35)",
+            }}
+          >
+            Claim free student books →
+          </a>
+        </div>
 
         {/* Search + filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -301,7 +396,7 @@ export default function TeacherHubPage() {
                     className="font-black text-base sm:text-lg leading-tight"
                     style={{ color: "hsl(210,20%,95%)" }}
                   >
-                    Vote for who should build the toolkit.
+                    Vote for who should help build the Teacher Toolkit.
                   </div>
                 </div>
               </div>
@@ -325,15 +420,16 @@ export default function TeacherHubPage() {
               style={{ color: "hsl(210,20%,90%)" }}
               data-testid="teacher-hub-vote-explainer"
             >
-              <strong>Vote for the teacher you want to help build the toolkit
-              that will amplify Coach App learning.</strong>
+              <strong>Vote for the teacher you want shaping the tools students
+              will actually use in advisory, classrooms, mentoring, and life.</strong>
             </p>
             <p
               className="text-[11px] leading-relaxed mb-4"
               style={{ color: "hsl(220,15%,65%)" }}
             >
-              Students and teachers each get one vote per teacher. Counts update
-              live across all browsers. Toggle your pick anytime — no lock-in.
+              Students and teachers each get one vote per teacher. This is how
+              local student signal helps decide who should translate the book
+              into a school-ready system.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -496,11 +592,11 @@ export default function TeacherHubPage() {
               className="font-black mb-2"
               style={{ fontSize: "clamp(1.2rem, 2.4vw, 1.6rem)", color: "hsl(210,20%,95%)" }}
             >
-              Teach inside MaxCoach.
+              Help build the school-ready version.
             </h3>
             <p className="text-sm leading-relaxed" style={{ color: "hsl(220,15%,75%)" }}>
-              Drop your bio + the one thing you'd be unreasonably great at teaching.
-              Adam reviews every application personally.
+              Apply to help turn the Student Edition into practical tools for
+              classrooms, advisory periods, mentoring, and the 300-review local pilot.
             </p>
           </div>
           <button
@@ -511,7 +607,7 @@ export default function TeacherHubPage() {
               background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
             }}
           >
-            Become a teacher →
+            Apply as a Teacher Builder →
           </button>
         </div>
       </section>
@@ -580,6 +676,14 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
             <span className="truncate">{teacher.name}</span>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {teacher.school && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: "hsla(213,100%,55%,0.16)", color: "hsl(213,100%,75%)" }}
+              >
+                {teacher.school}
+              </span>
+            )}
             {expertise.slice(0, 2).map((e) => (
               <span
                 key={e}
@@ -627,6 +731,9 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
         className="text-sm leading-relaxed mb-3"
         style={{ color: "hsl(220,15%,75%)" }}
       >
+        {teacher.role_title && (
+          <span style={{ color: "hsl(210,20%,90%)", fontWeight: 700 }}>{teacher.role_title}: </span>
+        )}
         {(teacher.bio || "").length > 180
           ? `${teacher.bio.slice(0, 180)}…`
           : teacher.bio}
@@ -650,6 +757,11 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
             ? `"${teacher.why_great.slice(0, 140)}…"`
             : `"${teacher.why_great}"`}
         </p>
+        {teacher.toolkit_tool && (
+          <div className="text-[11px] mt-2" style={{ color: "hsl(220,15%,60%)" }}>
+            Tool to test: <span style={{ color: accent, fontWeight: 700 }}>{teacher.toolkit_tool}</span>
+          </div>
+        )}
       </div>
 
       {/* VOTE BUTTON — sticks to bottom of card */}
@@ -704,8 +816,13 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
 function ApplyModal({ onClose, onSubmitted }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [school, setSchool] = useState("");
+  const [roleTitle, setRoleTitle] = useState("");
   const [bio, setBio] = useState("");
   const [whyGreat, setWhyGreat] = useState("");
+  const [studentNeed, setStudentNeed] = useState("");
+  const [toolkitTool, setToolkitTool] = useState("");
+  const [retreatInterest, setRetreatInterest] = useState(false);
   const [photoUrl, setPhotoUrl] = useState("");
   const [picks, setPicks] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -719,9 +836,19 @@ function ApplyModal({ onClose, onSubmitted }) {
     e?.preventDefault?.();
     if (busy) return;
     setErr(null);
-    if (!name.trim() || !email.trim() || bio.trim().length < 30 || whyGreat.trim().length < 30 || picks.length === 0) {
+    if (
+      !name.trim() ||
+      !email.trim() ||
+      !school.trim() ||
+      !roleTitle.trim() ||
+      !toolkitTool ||
+      studentNeed.trim().length < 30 ||
+      bio.trim().length < 30 ||
+      whyGreat.trim().length < 30 ||
+      picks.length === 0
+    ) {
       setErr(
-        "Fill all required fields. Bio + 'Why I'm great' both need at least 30 characters, and pick at least one expertise tag."
+        "Fill all required fields. Student need, bio, and your pitch each need at least 30 characters, and pick at least one expertise tag."
       );
       return;
     }
@@ -732,8 +859,13 @@ function ApplyModal({ onClose, onSubmitted }) {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          school: school.trim() || null,
+          role_title: roleTitle.trim() || null,
           bio: bio.trim(),
           why_great: whyGreat.trim(),
+          student_need: studentNeed.trim() || null,
+          toolkit_tool: toolkitTool || null,
+          retreat_interest: retreatInterest,
           expertise: picks,
           photo_url: photoUrl.trim() || null,
         }),
@@ -775,7 +907,7 @@ function ApplyModal({ onClose, onSubmitted }) {
             </h3>
             <p className="text-sm leading-relaxed mb-5" style={{ color: "hsl(220,15%,70%)" }}>
               Adam reviews every applicant personally. If it's a fit, you'll be
-              live on the Teacher Hub within a few days.
+              considered for the founding Teacher Toolkit Builder cohort.
             </p>
             <button
               onClick={onClose}
@@ -792,7 +924,7 @@ function ApplyModal({ onClose, onSubmitted }) {
           <form onSubmit={submit} data-testid="teacher-apply-form" className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-black text-xl" style={{ color: "hsl(210,20%,95%)" }}>
-                Become a teacher
+                Apply as a Teacher Builder
               </h2>
               <button
                 type="button"
@@ -832,6 +964,40 @@ function ApplyModal({ onClose, onSubmitted }) {
                 onChange={(e) => setEmail(e.target.value)}
                 data-testid="teacher-apply-email"
                 placeholder="alex@example.com"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{
+                  background: "hsl(220,30%,13%)",
+                  border: "1px solid hsl(220,30%,22%)",
+                  color: "hsl(210,20%,90%)",
+                }}
+              />
+            </FormField>
+
+            <FormField label="School / organization *">
+              <select
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                data-testid="teacher-apply-school"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{
+                  background: "hsl(220,30%,13%)",
+                  border: "1px solid hsl(220,30%,22%)",
+                  color: "hsl(210,20%,90%)",
+                }}
+              >
+                <option value="">Pick one</option>
+                {PILOT_SCHOOLS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Role / subject *">
+              <input
+                value={roleTitle}
+                onChange={(e) => setRoleTitle(e.target.value)}
+                data-testid="teacher-apply-role-title"
+                placeholder="English teacher, advisory lead, coach, counselor..."
                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
                 style={{
                   background: "hsl(220,30%,13%)",
@@ -885,6 +1051,47 @@ function ApplyModal({ onClose, onSubmitted }) {
               </div>
             </FormField>
 
+            <FormField label="Tool from the book you want to test first *">
+              <select
+                value={toolkitTool}
+                onChange={(e) => setToolkitTool(e.target.value)}
+                data-testid="teacher-apply-toolkit-tool"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{
+                  background: "hsl(220,30%,13%)",
+                  border: "1px solid hsl(220,30%,22%)",
+                  color: "hsl(210,20%,90%)",
+                }}
+              >
+                <option value="">Pick a tool</option>
+                {TOOLKIT_TOOLS.map((tool) => (
+                  <option key={tool} value={tool}>{tool}</option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="What do students need right now that school is not fully giving them? *">
+              <textarea
+                value={studentNeed}
+                onChange={(e) => setStudentNeed(e.target.value)}
+                data-testid="teacher-apply-student-need"
+                rows={3}
+                placeholder="Name the real gap you see. Be honest and practical."
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none leading-relaxed"
+                style={{
+                  background: "hsl(220,30%,13%)",
+                  border: "1px solid hsl(220,30%,22%)",
+                  color: "hsl(210,20%,90%)",
+                }}
+              />
+              <div
+                className="text-[11px] mt-1"
+                style={{ color: studentNeed.length > 1000 ? "hsl(0,70%,65%)" : "hsl(220,15%,50%)" }}
+              >
+                {studentNeed.length} / 1000
+              </div>
+            </FormField>
+
             <FormField label="Bio * (30–1500 chars)">
               <textarea
                 value={bio}
@@ -907,13 +1114,13 @@ function ApplyModal({ onClose, onSubmitted }) {
               </div>
             </FormField>
 
-            <FormField label="Why I'm great for the toolkit * (30–600 chars)">
+            <FormField label="Why should you earn a founding teacher spot? * (30–600 chars)">
               <textarea
                 value={whyGreat}
                 onChange={(e) => setWhyGreat(e.target.value)}
                 data-testid="teacher-apply-why-great"
                 rows={3}
-                placeholder="The one thing you'd be unreasonably great at teaching here."
+                placeholder="What would make you valuable in a 3-month build with students, teachers, and this book?"
                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none leading-relaxed"
                 style={{
                   background: "hsl(220,30%,13%)",
@@ -928,6 +1135,23 @@ function ApplyModal({ onClose, onSubmitted }) {
                 {whyGreat.length} / 600
               </div>
             </FormField>
+
+            <label
+              className="flex items-start gap-3 p-3 rounded-xl cursor-pointer"
+              style={{ background: "hsl(220,30%,13%)", border: "1px solid hsl(220,30%,22%)" }}
+            >
+              <input
+                type="checkbox"
+                checked={retreatInterest}
+                onChange={(e) => setRetreatInterest(e.target.checked)}
+                data-testid="teacher-apply-retreat-interest"
+                className="mt-0.5"
+              />
+              <span className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,72%)" }}>
+                I am interested in a 1-month campus working group / retreat-style pilot to test tools,
+                improve them with student feedback, and help shape the Teacher Edition.
+              </span>
+            </label>
 
             {err && (
               <div
