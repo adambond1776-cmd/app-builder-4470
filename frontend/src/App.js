@@ -92,6 +92,24 @@ export default function App() {
     catch { setScreen("onboarding"); }
   }, [user]);
 
+  const handleAuthed = async (u) => { setUser(u); setTrack(u.current_track || ""); };
+  const handleLogout = async () => { try { await apiJSON("/auth/logout", { method: "POST" }); } catch {} setUser(false); setScreen("welcome"); };
+  const startLogin = () => {
+    const redirectUrl = window.location.origin + "/";
+    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+  const openBurners = (from) => { setPrevScreen(from); setScreen("burners"); };
+  const refreshUser = async () => { try { const u = await apiJSON("/auth/me"); setUser(u); setTrack(u.current_track || ""); } catch {} };
+
+  if (hasSessionInUrl) {
+    return (
+      <div className="flex flex-col h-screen w-full max-w-md mx-auto overflow-hidden" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
+        <AuthCallback onAuthed={handleAuthed} />
+      </div>
+    );
+  }
+
   // --- Public routes short-circuit auth entirely ---
   if (route.type === "pitch_public") {
     return (
@@ -149,16 +167,6 @@ export default function App() {
       </div>
     );
   }
-
-  const handleAuthed = async (u) => { setUser(u); setTrack(u.current_track || ""); };
-  const handleLogout = async () => { try { await apiJSON("/auth/logout", { method: "POST" }); } catch {} setUser(false); setScreen("welcome"); };
-  const startLogin = () => {
-    const redirectUrl = window.location.origin + "/";
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-  };
-  const openBurners = (from) => { setPrevScreen(from); setScreen("burners"); };
-  const refreshUser = async () => { try { const u = await apiJSON("/auth/me"); setUser(u); setTrack(u.current_track || ""); } catch {} };
 
   let body;
   if (hasSessionInUrl && (user === null || user === false)) {
