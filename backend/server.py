@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import logging
+import time
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 from typing import List, Literal, Optional
@@ -32,7 +33,8 @@ from config import (
     MILES_RAW_HISTORY_KEEP, MILES_DAILY_MESSAGE_CAP, MILES_NUDGE_APPROACHING, MILES_NUDGE_FINAL,
     MILES_FOUNDING_PRICE, MILES_LAUNCH_PRICE, MILES_FOUNDING_CAP,
     MILES_VALID_PERSONAS, MILES_VALID_SUBJECTS, MILES_FEATURE_POLL_OPTIONS,
-    ENABLE_STRIPE_CHECKOUT, ENABLE_PAYPAL_CHECKOUT,
+    ENABLE_DOCUMENTARY_INTEREST, ENABLE_FOUNDING_20_APPLICATIONS, ENABLE_MAX_PITCH,
+    ENABLE_FAMILY_OS, ENABLE_STRIPE_CHECKOUT, ENABLE_PAYPAL_CHECKOUT,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -684,6 +686,51 @@ def require_admin(x_admin_token: Optional[str] = Header(None)):
     if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Admin token required")
     return True
+
+
+@api_router.get("/admin/env-check")
+async def admin_env_check(_: bool = Depends(require_admin)):
+    mongo_connected = False
+    mongo_latency_ms = None
+    started = time.perf_counter()
+    try:
+        await asyncio.wait_for(db.command("ping"), timeout=5)
+        mongo_connected = True
+        mongo_latency_ms = round((time.perf_counter() - started) * 1000)
+    except Exception:
+        mongo_latency_ms = None
+
+    paypal_configured = ENABLE_PAYPAL_CHECKOUT and bool(PAYPAL_CLIENT_ID and PAYPAL_SECRET)
+    return {
+        "mongo": {
+            "connected": mongo_connected,
+            "latency_ms": mongo_latency_ms,
+        },
+        "integrations": {
+            "emergent_llm_key": bool(EMERGENT_KEY),
+            "admin_token": bool(ADMIN_TOKEN),
+            "stripe_api_key": bool(STRIPE_API_KEY),
+            "resend": {
+                "configured": bool(RESEND_API_KEY and RESEND_FROM_EMAIL),
+                "from_email_set": bool(RESEND_FROM_EMAIL),
+                "api_key_set": bool(RESEND_API_KEY),
+            },
+            "paypal": {
+                "configured": paypal_configured,
+                "env": PAYPAL_ENV,
+                "client_id_set": bool(PAYPAL_CLIENT_ID),
+                "secret_set": bool(PAYPAL_SECRET),
+            },
+        },
+        "feature_flags": {
+            "documentary_interest": ENABLE_DOCUMENTARY_INTEREST,
+            "founding_20_applications": ENABLE_FOUNDING_20_APPLICATIONS,
+            "max_pitch": ENABLE_MAX_PITCH,
+            "family_os": ENABLE_FAMILY_OS,
+            "stripe_checkout": ENABLE_STRIPE_CHECKOUT,
+            "paypal_checkout": ENABLE_PAYPAL_CHECKOUT,
+        },
+    }
 
 
 @api_router.get("/admin/stats")
