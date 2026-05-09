@@ -1,5 +1,21 @@
 // Shared API helper — always sends cookies.
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const configuredBackendUrl = process.env.REACT_APP_BACKEND_URL;
+
+function normalizeOrigin(origin) {
+  return origin ? origin.replace(/\/+$/, "") : "";
+}
+
+function resolveBackendUrl() {
+  if (typeof window !== "undefined") {
+    const { hostname, origin } = window.location;
+    if (hostname === "maxcoach.app" || hostname === "www.maxcoach.app") {
+      return origin;
+    }
+  }
+  return normalizeOrigin(configuredBackendUrl) || (typeof window !== "undefined" ? window.location.origin : "");
+}
+
+const BACKEND_URL = resolveBackendUrl();
 export const API = `${BACKEND_URL}/api`;
 
 export async function apiFetch(path, opts = {}) {
