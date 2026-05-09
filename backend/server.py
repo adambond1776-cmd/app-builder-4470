@@ -3012,6 +3012,11 @@ class TeacherApplyRequest(BaseModel):
     role_title: Optional[str] = None
     student_need: Optional[str] = None
     toolkit_tool: Optional[str] = None
+    teacher_student_problem: Optional[str] = None
+    filmed_publicly: Optional[str] = None
+    filmed_note: Optional[str] = None
+    summer_availability: Optional[str] = None
+    video_pitch_url: Optional[str] = None
     retreat_interest: bool = False
 
 
@@ -3026,6 +3031,11 @@ class TeacherUpdateRequest(BaseModel):
     role_title: Optional[str] = None
     student_need: Optional[str] = None
     toolkit_tool: Optional[str] = None
+    teacher_student_problem: Optional[str] = None
+    filmed_publicly: Optional[str] = None
+    filmed_note: Optional[str] = None
+    summer_availability: Optional[str] = None
+    video_pitch_url: Optional[str] = None
     retreat_interest: Optional[bool] = None
 
 
@@ -3191,7 +3201,14 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
     role_title = (body.role_title or "").strip()[:120] or None
     student_need = (body.student_need or "").strip()[:1000] or None
     toolkit_tool = (body.toolkit_tool or "").strip()[:160] or None
+    teacher_student_problem = (body.teacher_student_problem or "").strip()[:1000] or None
+    filmed_publicly = (body.filmed_publicly or "").strip()[:40] or None
+    filmed_note = (body.filmed_note or "").strip()[:500] or None
+    summer_availability = (body.summer_availability or "").strip()[:120] or None
+    video_pitch_url = (body.video_pitch_url or "").strip()[:500] or None
     retreat_interest = bool(body.retreat_interest)
+    if video_pitch_url and not video_pitch_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="video_pitch_url must be http(s)")
 
     # De-dupe by email — let people update an existing pending application
     existing = await db.teachers.find_one({"email": email}, {"_id": 0})
@@ -3213,6 +3230,11 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
                 "role_title": role_title,
                 "student_need": student_need,
                 "toolkit_tool": toolkit_tool,
+                "teacher_student_problem": teacher_student_problem,
+                "filmed_publicly": filmed_publicly,
+                "filmed_note": filmed_note,
+                "summer_availability": summer_availability,
+                "video_pitch_url": video_pitch_url,
                 "retreat_interest": retreat_interest,
                 "status": "pending",
                 "updated_at": now,
@@ -3233,6 +3255,11 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
         "role_title": role_title,
         "student_need": student_need,
         "toolkit_tool": toolkit_tool,
+        "teacher_student_problem": teacher_student_problem,
+        "filmed_publicly": filmed_publicly,
+        "filmed_note": filmed_note,
+        "summer_availability": summer_availability,
+        "video_pitch_url": video_pitch_url,
         "retreat_interest": retreat_interest,
         "status": "pending",
         "source_ip": request.client.host if request.client else None,
