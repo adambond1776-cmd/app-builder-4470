@@ -105,6 +105,11 @@ export default function TeacherHubPage() {
       })
       .catch(() => setTeachers([]));
 
+  const startTeacherSignIn = () => {
+    const redirectUrl = window.location.origin + window.location.pathname;
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
   useEffect(() => {
     document.title = "Teacher Hub · MaxCoach";
     reload();
@@ -137,8 +142,7 @@ export default function TeacherHubPage() {
 
   const handleVote = async (teacherId) => {
     if (!viewerCanVote) {
-      setVoteErr("Sign in to vote for the toolkit builder.");
-      setTimeout(() => setVoteErr(null), 4000);
+      startTeacherSignIn();
       return;
     }
     if (voting[teacherId]) return;
@@ -563,10 +567,11 @@ export default function TeacherHubPage() {
                 </div>
               </div>
               {!viewerCanVote && (
-                <a
-                  href="/"
+                <button
+                  type="button"
+                  onClick={startTeacherSignIn}
                   data-testid="teacher-leaderboard-signin-link"
-                  className="text-[11px] font-bold px-3 py-1.5 rounded-full no-underline whitespace-nowrap"
+                  className="text-[11px] font-bold px-3 py-1.5 rounded-full whitespace-nowrap"
                   style={{
                     background: "hsla(213,100%,55%,0.18)",
                     color: "hsl(213,100%,80%)",
@@ -574,7 +579,7 @@ export default function TeacherHubPage() {
                   }}
                 >
                   Sign in to vote
-                </a>
+                </button>
               )}
             </div>
             <p
