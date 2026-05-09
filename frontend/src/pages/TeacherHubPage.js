@@ -47,6 +47,7 @@ const PILOT_SCHOOLS = [
 ];
 
 const TOOLKIT_TOOLS = [
+  "Four Burners Framework",
   "Weekly Architecture Review",
   "Energy Audit",
   "Signal Board",
@@ -71,6 +72,19 @@ const HOW_IT_WORKS = [
   ["2", "Teachers pitch", "Local teachers apply for a founding seat and explain what they would build."],
   ["3", "Community votes", "Students and the community vote for the teachers they want to see in the build."],
   ["4", "Finalists build", "Selected teachers join the summer build challenge and shape the school-ready toolkit."],
+];
+
+const PITCH_FIELDS = [
+  "Full Name",
+  "School",
+  "Role / Subject",
+  "Why should YOU be selected?",
+  "What do students need right now?",
+  "Which book tool would you test first?",
+  "What teacher/student problem could this solve?",
+  "Filming / public-feature comfort",
+  "30-day summer retreat availability",
+  "Optional short video pitch or photo",
 ];
 
 export default function TeacherHubPage() {
@@ -435,6 +449,45 @@ export default function TeacherHubPage() {
           </a>
         </div>
 
+        <section
+          className="p-5 sm:p-6 rounded-3xl mb-8"
+          style={{
+            background: "linear-gradient(135deg, hsla(280,80%,55%,0.12), hsla(213,100%,55%,0.07))",
+            border: "1px solid hsla(280,80%,55%,0.3)",
+          }}
+          data-testid="teacher-pitch-form-preview"
+        >
+          <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(280,80%,78%)" }}>
+            Teacher Pitch Form
+          </div>
+          <h2 className="font-black text-xl sm:text-2xl mb-2" style={{ color: "hsl(210,20%,96%)" }}>
+            This is the contestant application.
+          </h2>
+          <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,74%)" }}>
+            Tell us why you should earn a founding teacher seat, what students need now,
+            and what you would test first during the summer build challenge.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-5">
+            {PITCH_FIELDS.map((field) => (
+              <div
+                key={field}
+                className="px-3 py-2 rounded-xl text-[11px] font-bold leading-tight"
+                style={{ background: "hsl(220,30%,10%)", color: "hsl(210,20%,88%)", border: "1px solid hsl(220,30%,20%)" }}
+              >
+                {field}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowApply(true)}
+            data-testid="teacher-pitch-form-open"
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-sm text-white"
+            style={{ background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))" }}
+          >
+            Apply / Pitch Yourself as a Founding Teacher →
+          </button>
+        </section>
+
         {/* Search + filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <input
@@ -499,13 +552,13 @@ export default function TeacherHubPage() {
                     className="text-[10px] font-bold uppercase tracking-widest"
                     style={{ color: "hsl(40,90%,70%)" }}
                   >
-                    Toolkit Builder Leaderboard
+                    Voting Section
                   </div>
                   <div
                     className="font-black text-base sm:text-lg leading-tight"
                     style={{ color: "hsl(210,20%,95%)" }}
                   >
-                    Vote for who should help build the Teacher Toolkit.
+                    Help decide which teachers earn a founding seat.
                   </div>
                 </div>
               </div>
@@ -529,8 +582,8 @@ export default function TeacherHubPage() {
               style={{ color: "hsl(210,20%,90%)" }}
               data-testid="teacher-hub-vote-explainer"
             >
-              <strong>Vote for the teacher you want shaping the tools students
-              will actually use in advisory, classrooms, mentoring, and life.</strong>
+              <strong>Vote for the teachers you want to see build the future of
+              this program.</strong>
             </p>
             <p
               className="text-[11px] leading-relaxed mb-4"
@@ -649,12 +702,12 @@ export default function TeacherHubPage() {
             <div className="text-3xl mb-3">📚</div>
             <h3 className="font-black text-lg mb-2" style={{ color: "hsl(210,20%,90%)" }}>
               {teachers.length === 0
-                ? "No teachers in the hub yet."
+                ? "No founding teacher pitches yet."
                 : "No matches for this filter."}
             </h3>
             <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,65%)" }}>
               {teachers.length === 0
-                ? "Be the first one in. The hub launches with the people who say yes early."
+                ? "Be the first to pitch for a founding seat."
                 : "Try a different expertise or clear the search."}
             </p>
             {teachers.length === 0 && (
@@ -666,7 +719,7 @@ export default function TeacherHubPage() {
                   background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
                 }}
               >
-                Apply to be a teacher →
+                Pitch yourself →
               </button>
             )}
           </div>
@@ -701,11 +754,11 @@ export default function TeacherHubPage() {
               className="font-black mb-2"
               style={{ fontSize: "clamp(1.2rem, 2.4vw, 1.6rem)", color: "hsl(210,20%,95%)" }}
             >
-              Help build the school-ready version.
+              Ready to pitch for a founding seat?
             </h3>
             <p className="text-sm leading-relaxed" style={{ color: "hsl(220,15%,75%)" }}>
-              Apply to help turn the Student Edition into practical tools for
-              classrooms, advisory periods, mentoring, and the 300-review local pilot.
+              Selected teachers help turn the Student Edition into practical tools for classrooms,
+              advisory periods, mentoring, and the 300-review local pilot.
             </p>
           </div>
           <button
@@ -716,7 +769,7 @@ export default function TeacherHubPage() {
               background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
             }}
           >
-            Apply as a Teacher Builder →
+            Apply / Pitch Yourself →
           </button>
         </div>
       </section>
