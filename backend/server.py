@@ -3008,6 +3008,11 @@ class TeacherApplyRequest(BaseModel):
     why_great: str
     photo_url: Optional[str] = None
     other_expertise: Optional[str] = None
+    school: Optional[str] = None
+    role_title: Optional[str] = None
+    student_need: Optional[str] = None
+    toolkit_tool: Optional[str] = None
+    retreat_interest: bool = False
 
 
 class TeacherUpdateRequest(BaseModel):
@@ -3017,6 +3022,11 @@ class TeacherUpdateRequest(BaseModel):
     why_great: Optional[str] = None
     photo_url: Optional[str] = None
     other_expertise: Optional[str] = None
+    school: Optional[str] = None
+    role_title: Optional[str] = None
+    student_need: Optional[str] = None
+    toolkit_tool: Optional[str] = None
+    retreat_interest: Optional[bool] = None
 
 
 def _validate_teacher_payload(name: str, bio: str, why_great: str, expertise: List[str]) -> None:
@@ -3177,6 +3187,11 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
         raise HTTPException(status_code=400, detail="photo_url must be http(s)")
 
     other_expertise = (body.other_expertise or "").strip()[:120] or None
+    school = (body.school or "").strip()[:120] or None
+    role_title = (body.role_title or "").strip()[:120] or None
+    student_need = (body.student_need or "").strip()[:1000] or None
+    toolkit_tool = (body.toolkit_tool or "").strip()[:160] or None
+    retreat_interest = bool(body.retreat_interest)
 
     # De-dupe by email — let people update an existing pending application
     existing = await db.teachers.find_one({"email": email}, {"_id": 0})
@@ -3194,6 +3209,11 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
                 "other_expertise": other_expertise,
                 "why_great": why_great,
                 "photo_url": photo_url,
+                "school": school,
+                "role_title": role_title,
+                "student_need": student_need,
+                "toolkit_tool": toolkit_tool,
+                "retreat_interest": retreat_interest,
                 "status": "pending",
                 "updated_at": now,
             }},
@@ -3209,6 +3229,11 @@ async def teachers_apply(body: TeacherApplyRequest, request: Request):
         "other_expertise": other_expertise,
         "why_great": why_great,
         "photo_url": photo_url,
+        "school": school,
+        "role_title": role_title,
+        "student_need": student_need,
+        "toolkit_tool": toolkit_tool,
+        "retreat_interest": retreat_interest,
         "status": "pending",
         "source_ip": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent", "")[:300] or None,
