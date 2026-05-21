@@ -39,6 +39,9 @@ const EXPERTISE_COLORS = {
   other: "#94a3b8",
 };
 
+const BOOK_TITLE = "The Business of Life, Student Edition – A Student’s Guide to Figuring It Out and Leveling Up";
+const BOOK_ISBN = "9798258761231";
+
 const PILOT_SCHOOLS = [
   "Newport High School",
   "Middletown High School",
@@ -47,35 +50,35 @@ const PILOT_SCHOOLS = [
 ];
 
 const TOOLKIT_TOOLS = [
-  "Four Burners Framework",
+  "Four Burners",
   "Weekly Architecture Review",
   "Energy Audit",
   "Signal Board",
   "Operating Agreement",
   "Presence Protocol",
   "90-Day Foundation Sprint",
-  "Genius Mining Starter",
-  "Household / Advisory Check-In",
+  "Genius Mining",
+  "Household / Advisory Check-ins",
 ];
 
 const OPPORTUNITY_POINTS = [
-  "Join a 30-day summer campus working retreat / build challenge",
-  "Help shape the first Teacher Toolkit and Teacher Edition",
-  "Receive public recognition as a founding contributor",
+  "Join a 30-day summer campus build retreat / working sprint",
+  "Shape the first school-ready Teacher Toolkit from real student feedback",
+  "Receive public founding contributor recognition if selected",
   "Potential profit-sharing or licensing upside if the toolkit becomes a paid school product",
-  "Become one of the public faces of the local school rollout",
-  "Optionally be part of a documented local education transformation story, with full consent",
+  "Become one of the local teacher faces of the Newport County rollout",
+  "Possible filming for a reality-doc style pilot, always with consent and clear boundaries",
 ];
 
 const HOW_IT_WORKS = [
-  ["1", "Students get the book", "Juniors and seniors read the Student Edition and try one real tool."],
-  ["2", "Teachers pitch", "Local teachers apply for a founding seat and explain what they would build."],
-  ["3", "Community votes", "Students and the community vote for the teachers they want to see in the build."],
-  ["4", "Finalists build", "Selected teachers join the summer build challenge and shape the school-ready toolkit."],
+  ["1", "Free books go local", "Juniors and seniors at Newport, Middletown, and Portsmouth get the book free."],
+  ["2", "Teachers pitch themselves", "Applicants explain what students need and which tool they would test first."],
+  ["3", "The community votes", "Students, families, and local supporters help surface the strongest founding-seat candidates."],
+  ["4", "Finalists build", "Selected teachers join the 30-day retreat and turn student signal into a classroom-ready toolkit."],
 ];
 
 const PITCH_FIELDS = [
-  "Full Name",
+  "Full name",
   "School",
   "Role / Subject",
   "Why should YOU be selected?",
@@ -90,7 +93,6 @@ const PITCH_FIELDS = [
 export default function TeacherHubPage() {
   const [teachers, setTeachers] = useState(null);
   const [viewerCanVote, setViewerCanVote] = useState(false);
-  const [me, setMe] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showApply, setShowApply] = useState(false);
@@ -111,9 +113,8 @@ export default function TeacherHubPage() {
   };
 
   useEffect(() => {
-    document.title = "Teacher Hub · MaxCoach";
+    document.title = "Teacher Toolkit Casting Call · MaxCoach";
     reload();
-    apiJSON("/auth/me").then(setMe).catch(() => setMe(null));
 
     // Real-time vote sync: re-poll the public list every 12s so vote counts +
     // leaderboard order stay live across browsers without a manual refresh.
@@ -184,16 +185,24 @@ export default function TeacherHubPage() {
     return teachers.filter((t) => {
       if (filter !== "all" && !(t.expertise || []).includes(filter)) return false;
       if (!q) return true;
-      const blob = `${t.name || ""} ${t.bio || ""} ${t.why_great || ""}`.toLowerCase();
+      const tags = (t.expertise || []).map((e) => EXPERTISE_LABELS[e] || e).join(" ");
+      const blob = `${t.name || ""} ${t.school || ""} ${t.role_title || ""} ${tags} ${t.bio || ""} ${
+        t.why_great || ""
+      }`.toLowerCase();
       return blob.includes(q);
     });
   }, [teachers, filter, search]);
+
+  const topTeachers = useMemo(() => {
+    if (!teachers) return [];
+    return [...teachers].sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0)).slice(0, 3);
+  }, [teachers]);
 
   return (
     <div
       className="min-h-screen w-full"
       style={{
-        background: "hsl(220,40%,8%)",
+        background: "radial-gradient(circle at 20% 0%, hsla(185,85%,45%,0.18), transparent 30%), radial-gradient(circle at 85% 12%, hsla(213,100%,55%,0.14), transparent 28%), hsl(220,40%,8%)",
         color: "hsl(210,20%,90%)",
         fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
       }}
@@ -216,7 +225,7 @@ export default function TeacherHubPage() {
           >
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-white text-sm"
-              style={{ background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(280,80%,55%))" }}
+              style={{ background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(185,85%,45%))" }}
             >
               M
             </div>
@@ -236,7 +245,7 @@ export default function TeacherHubPage() {
               data-testid="teacher-hub-apply-btn"
               className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
               style={{
-                background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
+                background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))",
               }}
             >
               Apply as a builder
@@ -246,50 +255,111 @@ export default function TeacherHubPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-5xl mx-auto px-5 pt-12 pb-8 sm:pt-16 sm:pb-10">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest mb-5"
-          style={{
-            background: "hsla(280,80%,55%,0.12)",
-            border: "1px solid hsla(280,80%,55%,0.3)",
-            color: "hsl(280,80%,80%)",
-          }}
-        >
-          <span style={{ color: "hsl(280,80%,75%)" }}>●</span>
-          Casting call · Teacher Toolkit Builder
-        </motion.div>
+      <section className="max-w-5xl mx-auto px-5 pt-10 pb-8 sm:pt-16 sm:pb-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-5 lg:gap-8 items-start mb-8">
+          <div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest mb-5"
+              style={{
+                background: "hsla(185,85%,45%,0.12)",
+                border: "1px solid hsla(185,85%,45%,0.32)",
+                color: "hsl(185,80%,72%)",
+              }}
+            >
+              <span style={{ color: "hsl(185,80%,70%)" }}>●</span>
+              Casting call · Founding Teacher Seats
+            </motion.div>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="font-black leading-[1.05] tracking-tight mb-4"
-          style={{ fontSize: "clamp(2rem, 4.8vw, 3.4rem)", color: "hsl(210,20%,95%)" }}
-        >
-          Teachers — Pitch Yourself for a Founding Teacher Seat
-        </motion.h1>
+            <motion.h1
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+              className="font-black leading-[1.02] tracking-tight mb-4"
+              style={{ fontSize: "clamp(2.15rem, 5.2vw, 4rem)", color: "hsl(210,20%,96%)" }}
+            >
+              Teachers — Pitch Yourself for a Founding Teacher Seat
+            </motion.h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-base sm:text-lg leading-relaxed mb-8"
-          style={{ color: "hsl(220,15%,70%)", maxWidth: "44rem" }}
-        >
-          This summer we're selecting a small group of local teachers to help turn{" "}
-          <strong>The Business of Life: Student Edition</strong> into a real
-          school-ready Teacher Toolkit. Students get the book. The community votes.
-          Finalists pitch. Selected teachers join a 30-day campus build retreat and
-          may earn founding contributor status with potential profit-sharing upside.
-        </motion.p>
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-base sm:text-lg leading-relaxed mb-6"
+              style={{ color: "hsl(220,15%,74%)", maxWidth: "46rem" }}
+            >
+              This summer we're selecting a small group of local teachers to help turn the book into a
+              real school-ready Teacher Toolkit. Students get the book for free. The community votes.
+              Finalists pitch. Selected teachers join a 30-day campus build retreat and may earn founding
+              contributor status with potential profit-sharing upside.
+            </motion.p>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowApply(true)}
+                data-testid="teacher-toolkit-apply-hero"
+                className="px-5 py-3 rounded-2xl font-bold text-sm text-white"
+                style={{ background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))" }}
+              >
+                Apply / Pitch Yourself →
+              </button>
+              <a
+                href="#teacher-vote"
+                data-testid="teacher-toolkit-vote-link"
+                className="px-5 py-3 rounded-2xl font-bold text-sm text-center no-underline"
+                style={{
+                  background: "hsla(213,100%,55%,0.12)",
+                  color: "hsl(213,100%,78%)",
+                  border: "1px solid hsla(213,100%,55%,0.36)",
+                }}
+              >
+                Help choose the founding teachers →
+              </a>
+            </div>
+          </div>
+
+          <motion.aside
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="p-5 sm:p-6 rounded-3xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(213,100%,55%,0.16), hsla(185,85%,45%,0.08))",
+              border: "1px solid hsla(185,85%,45%,0.34)",
+              boxShadow: "0 24px 80px rgba(14, 165, 233, 0.12)",
+            }}
+            data-testid="teacher-book-card"
+          >
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: "hsl(185,80%,72%)" }}>
+              Current book
+            </div>
+            <h2 className="font-black text-xl leading-tight mb-3" style={{ color: "hsl(210,20%,96%)" }}>
+              {BOOK_TITLE}
+            </h2>
+            <div className="text-xs font-bold mb-5" style={{ color: "hsl(220,15%,68%)" }}>
+              ISBN: {BOOK_ISBN}
+            </div>
+            <div className="space-y-3">
+              {[
+                ["Free for students", "Juniors and seniors in the local pilot get a copy at no cost."],
+                ["Reality-doc energy", "A public build challenge with clear consent, real stakes, and local pride."],
+                ["Teacher-built", "The toolkit gets shaped by educators who know classrooms, advisory, and students."],
+              ].map(([title, body]) => (
+                <div key={title} className="p-3 rounded-2xl" style={{ background: "hsla(220,30%,8%,0.48)", border: "1px solid hsla(220,30%,24%,0.7)" }}>
+                  <div className="font-black text-sm mb-1" style={{ color: "hsl(210,20%,94%)" }}>{title}</div>
+                  <p className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,68%)" }}>{body}</p>
+                </div>
+              ))}
+            </div>
+          </motion.aside>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8" data-testid="teacher-toolkit-pilot-stats">
           {[
-            ["3 schools", "Newport, Middletown, Portsmouth"],
-            ["300 reviews", "Authentic student feedback in 30 days"],
-            ["Founding seats", "Teachers earn a shot at the summer build retreat"],
+            ["3 high schools", "Newport, Middletown, Portsmouth"],
+            ["300 authentic reviews", "Student signal in the first 30 days"],
+            ["Founding seats", "Teachers compete for the summer build retreat"],
           ].map(([k, v]) => (
             <div
               key={k}
@@ -307,37 +377,40 @@ export default function TeacherHubPage() {
             className="p-5 sm:p-6 rounded-3xl"
             style={{ background: "hsl(220,30%,11%)", border: "1px solid hsl(220,30%,19%)" }}
           >
-            <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(142,70%,70%)" }}>
-              The Local Pilot
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(185,80%,72%)" }}>
+              Local Pilot
             </div>
             <h2 className="font-black text-xl mb-3" style={{ color: "hsl(210,20%,96%)" }}>
               Free books first. Real student signal next.
             </h2>
-            <p className="text-sm leading-relaxed" style={{ color: "hsl(220,15%,72%)" }}>
-              We are putting the Student Edition in front of juniors and seniors at Newport High,
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,72%)" }}>
+              We are putting {BOOK_TITLE} in front of juniors and seniors at Newport High,
               Middletown High, and Portsmouth High. The first goal is 300 authentic reviews,
-              reflections, and tool responses in 30 days — then teachers help turn what works
-              into the school-ready version.
+              reflections, and tool responses in 30 days.
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "hsl(220,15%,72%)" }}>
+              The teacher seats are for educators who can translate that student feedback into lessons,
+              prompts, check-ins, and classroom routines that schools can actually use.
             </p>
           </div>
 
           <div
             className="p-5 sm:p-6 rounded-3xl"
             style={{
-              background: "linear-gradient(135deg, hsla(40,90%,55%,0.12), hsla(280,80%,55%,0.07))",
-              border: "1px solid hsla(40,90%,55%,0.32)",
+              background: "linear-gradient(135deg, hsla(185,85%,45%,0.12), hsla(213,100%,55%,0.08))",
+              border: "1px solid hsla(185,85%,45%,0.32)",
             }}
           >
-            <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(40,90%,72%)" }}>
-              The Opportunity
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(185,80%,72%)" }}>
+              The Opportunity / Prize
             </div>
             <h2 className="font-black text-xl mb-3" style={{ color: "hsl(210,20%,96%)" }}>
-              This is not a profile. It is a founding-seat application.
+              This is not a normal teacher profile. It is a founding-seat application.
             </h2>
             <ul className="space-y-2">
               {OPPORTUNITY_POINTS.map((point) => (
                 <li key={point} className="text-xs leading-relaxed flex gap-2" style={{ color: "hsl(220,15%,76%)" }}>
-                  <span style={{ color: "hsl(40,90%,70%)", fontWeight: 900 }}>✓</span>
+                  <span style={{ color: "hsl(185,80%,70%)", fontWeight: 900 }}>✓</span>
                   <span>{point}</span>
                 </li>
               ))}
@@ -358,7 +431,7 @@ export default function TeacherHubPage() {
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mb-3"
-                  style={{ background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(280,80%,55%))", color: "white" }}
+                  style={{ background: "linear-gradient(135deg, hsl(213,100%,55%), hsl(185,85%,45%))", color: "white" }}
                 >
                   {step}
                 </div>
@@ -372,24 +445,24 @@ export default function TeacherHubPage() {
         <div
           className="p-5 sm:p-6 rounded-3xl mb-7"
           style={{
-            background: "linear-gradient(135deg, hsla(213,100%,55%,0.12), hsla(142,70%,45%,0.06))",
+            background: "linear-gradient(135deg, hsla(213,100%,55%,0.12), hsla(185,85%,45%,0.08))",
             border: "1px solid hsla(213,100%,55%,0.28)",
           }}
           data-testid="teacher-toolkit-builder-vision"
           id="toolkit-tools"
         >
           <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(213,100%,75%)" }}>
-            Student Edition → Teacher Toolkit
+            Toolkit Tools
           </div>
           <h2 className="font-black text-xl sm:text-2xl mb-3" style={{ color: "hsl(210,20%,96%)" }}>
-            Students do not need another adult telling them to try harder.
+            Build the teacher version around tools students can actually feel.
           </h2>
           <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,75%)" }}>
-            They need adults who can help them build better systems: weekly reflection,
-            energy awareness, signal tracking, cleaner communication, presence, 90-day
-            growth sprints, and a way to mine the genius already hiding in how they think.
+            The founding cohort will test and package practical systems for weekly reflection,
+            energy awareness, signal tracking, cleaner agreements, presence, 90-day momentum,
+            genius discovery, and household or advisory conversations.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {TOOLKIT_TOOLS.map((tool) => (
               <div
                 key={tool}
@@ -406,27 +479,7 @@ export default function TeacherHubPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-          <button
-            onClick={() => setShowApply(true)}
-            data-testid="teacher-toolkit-apply-hero"
-            className="px-5 py-3 rounded-2xl font-bold text-sm text-white"
-            style={{ background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))" }}
-          >
-            Apply as a Teacher Builder →
-          </button>
-          <a
-            href="#teacher-vote"
-            data-testid="teacher-toolkit-vote-link"
-            className="px-5 py-3 rounded-2xl font-bold text-sm text-center no-underline"
-            style={{
-              background: "hsla(40,90%,55%,0.12)",
-              color: "hsl(40,90%,75%)",
-              border: "1px solid hsla(40,90%,55%,0.35)",
-            }}
-          >
-            Vote for a Teacher →
-          </a>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
           <a
             href="/free-aquidneck-books"
             data-testid="teacher-toolkit-free-books-link"
@@ -449,27 +502,36 @@ export default function TeacherHubPage() {
               border: "1px solid hsl(220,30%,24%)",
             }}
           >
-            See the tools →
+            See the toolkit tools →
           </a>
+          <button
+            onClick={() => setShowApply(true)}
+            data-testid="teacher-toolkit-apply-secondary"
+            className="px-5 py-3 rounded-2xl font-bold text-sm text-white"
+            style={{ background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))" }}
+          >
+            Pitch for a founding seat →
+          </button>
         </div>
 
         <section
           className="p-5 sm:p-6 rounded-3xl mb-8"
           style={{
-            background: "linear-gradient(135deg, hsla(280,80%,55%,0.12), hsla(213,100%,55%,0.07))",
-            border: "1px solid hsla(280,80%,55%,0.3)",
+            background: "linear-gradient(135deg, hsla(185,85%,45%,0.12), hsla(213,100%,55%,0.07))",
+            border: "1px solid hsla(185,85%,45%,0.3)",
           }}
           data-testid="teacher-pitch-form-preview"
         >
-          <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(280,80%,78%)" }}>
+          <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "hsl(185,80%,72%)" }}>
             Teacher Pitch Form
           </div>
           <h2 className="font-black text-xl sm:text-2xl mb-2" style={{ color: "hsl(210,20%,96%)" }}>
-            This is the contestant application.
+            Contestant-style, but grounded in real classroom judgment.
           </h2>
           <p className="text-sm leading-relaxed mb-4" style={{ color: "hsl(220,15%,74%)" }}>
             Tell us why you should earn a founding teacher seat, what students need now,
-            and what you would test first during the summer build challenge.
+            which tool you would test first, what teacher/student problem it could solve,
+            and how available you are for the 30-day summer retreat.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-5">
             {PITCH_FIELDS.map((field) => (
@@ -486,11 +548,20 @@ export default function TeacherHubPage() {
             onClick={() => setShowApply(true)}
             data-testid="teacher-pitch-form-open"
             className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-sm text-white"
-            style={{ background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))" }}
+            style={{ background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))" }}
           >
-            Apply / Pitch Yourself as a Founding Teacher →
+            Open the teacher pitch form →
           </button>
         </section>
+
+        <div className="mb-4" data-testid="teacher-roster-controls-heading">
+          <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(185,80%,72%)" }}>
+            Current Teacher Pitches
+          </div>
+          <h2 className="font-black text-xl sm:text-2xl" style={{ color: "hsl(210,20%,96%)" }}>
+            Browse the public roster and vote below.
+          </h2>
+        </div>
 
         {/* Search + filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -518,16 +589,16 @@ export default function TeacherHubPage() {
               style={{
                 background:
                   filter === f.k
-                    ? `${EXPERTISE_COLORS[f.k] || "hsl(280,80%,55%)"}22`
+                    ? `${EXPERTISE_COLORS[f.k] || "hsl(185,85%,45%)"}22`
                     : "hsl(220,30%,13%)",
                 border: `1px solid ${
                   filter === f.k
-                    ? `${EXPERTISE_COLORS[f.k] || "hsl(280,80%,55%)"}66`
+                    ? `${EXPERTISE_COLORS[f.k] || "hsl(185,85%,45%)"}66`
                     : "hsl(220,30%,22%)"
                 }`,
                 color:
                   filter === f.k
-                    ? EXPERTISE_COLORS[f.k] || "hsl(280,80%,80%)"
+                    ? EXPERTISE_COLORS[f.k] || "hsl(185,80%,72%)"
                     : "hsl(220,15%,65%)",
               }}
             >
@@ -537,136 +608,128 @@ export default function TeacherHubPage() {
         </div>
       </section>
 
-      {/* LEADERBOARD — shows top 3 by vote count */}
-      {teachers && teachers.length > 0 && (
-        <section className="max-w-5xl mx-auto px-5 pb-2" data-testid="teacher-leaderboard" id="teacher-vote">
-          <div
-            className="p-5 sm:p-6 rounded-3xl mb-6"
-            style={{
-              background:
-                "linear-gradient(135deg, hsla(40,90%,55%,0.10), hsla(280,80%,55%,0.06))",
-              border: "1px solid hsla(40,90%,55%,0.28)",
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🏆</span>
-                <div>
-                  <div
-                    className="text-[10px] font-bold uppercase tracking-widest"
-                    style={{ color: "hsl(40,90%,70%)" }}
-                  >
-                    Voting Section
-                  </div>
-                  <div
-                    className="font-black text-base sm:text-lg leading-tight"
-                    style={{ color: "hsl(210,20%,95%)" }}
-                  >
-                    Help decide which teachers earn a founding seat.
-                  </div>
-                </div>
+      {/* Voting Section */}
+      <section className="max-w-5xl mx-auto px-5 pb-2" data-testid="teacher-leaderboard" id="teacher-vote">
+        <div
+          className="p-5 sm:p-6 rounded-3xl mb-6"
+          style={{
+            background:
+              "linear-gradient(135deg, hsla(213,100%,55%,0.12), hsla(185,85%,45%,0.07))",
+            border: "1px solid hsla(213,100%,55%,0.28)",
+          }}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div>
+              <div
+                className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                style={{ color: "hsl(185,80%,72%)" }}
+              >
+                Voting Section
               </div>
-              {!viewerCanVote && (
-                <button
-                  type="button"
-                  onClick={startTeacherSignIn}
-                  data-testid="teacher-leaderboard-signin-link"
-                  className="text-[11px] font-bold px-3 py-1.5 rounded-full whitespace-nowrap"
+              <h2
+                className="font-black text-xl sm:text-2xl leading-tight"
+                style={{ color: "hsl(210,20%,95%)" }}
+              >
+                Help decide which teachers earn a founding seat.
+              </h2>
+            </div>
+            {!viewerCanVote && (
+              <button
+                type="button"
+                onClick={startTeacherSignIn}
+                data-testid="teacher-leaderboard-signin-link"
+                className="text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap"
+                style={{
+                  background: "hsla(213,100%,55%,0.18)",
+                  color: "hsl(213,100%,80%)",
+                  border: "1px solid hsla(213,100%,55%,0.4)",
+                }}
+              >
+                Sign in to vote
+              </button>
+            )}
+          </div>
+          <p
+            className="text-sm leading-relaxed mb-5"
+            style={{ color: "hsl(220,15%,72%)" }}
+            data-testid="teacher-hub-vote-explainer"
+          >
+            Approved teacher pitches appear here. Students, families, and community members can vote for
+            the educators they want to see turn the Student Edition into a school-ready Teacher Toolkit.
+          </p>
+
+          {teachers === null ? (
+            <div className="p-4 rounded-2xl text-sm" style={{ background: "hsl(220,30%,11%)", border: "1px solid hsl(220,30%,19%)", color: "hsl(220,15%,65%)" }}>
+              Loading teacher pitches...
+            </div>
+          ) : topTeachers.length === 0 ? (
+            <div className="p-4 rounded-2xl" style={{ background: "hsl(220,30%,11%)", border: "1px dashed hsl(220,30%,24%)" }}>
+              <div className="font-black text-sm mb-1" style={{ color: "hsl(210,20%,92%)" }}>
+                No approved pitches yet.
+              </div>
+              <p className="text-xs leading-relaxed mb-3" style={{ color: "hsl(220,15%,65%)" }}>
+                The first approved teacher applications will become the public voting roster.
+              </p>
+              <button
+                onClick={() => setShowApply(true)}
+                data-testid="teacher-vote-empty-cta"
+                className="px-4 py-2 rounded-full text-xs font-bold text-white"
+                style={{ background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))" }}
+              >
+                Be the first to pitch →
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {topTeachers.map((t, idx) => (
+                <div
+                  key={t.id}
+                  data-testid={`leaderboard-row-${idx + 1}`}
+                  className="p-3 rounded-2xl flex items-center gap-3"
                   style={{
-                    background: "hsla(213,100%,55%,0.18)",
-                    color: "hsl(213,100%,80%)",
-                    border: "1px solid hsla(213,100%,55%,0.4)",
+                    background: "hsl(220,30%,11%)",
+                    border:
+                      idx === 0
+                        ? "1px solid hsla(185,85%,45%,0.52)"
+                        : "1px solid hsl(220,30%,19%)",
                   }}
                 >
-                  Sign in to vote
-                </button>
-              )}
-            </div>
-            <p
-              className="text-xs leading-relaxed mb-1"
-              style={{ color: "hsl(210,20%,90%)" }}
-              data-testid="teacher-hub-vote-explainer"
-            >
-              <strong>Vote for the teachers you want to see build the future of
-              this program.</strong>
-            </p>
-            <p
-              className="text-[11px] leading-relaxed mb-4"
-              style={{ color: "hsl(220,15%,65%)" }}
-            >
-              Students and teachers each get one vote per teacher. This is how
-              local student signal helps decide who should translate the book
-              into a school-ready system.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[...teachers]
-                .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
-                .slice(0, 3)
-                .map((t, idx) => (
                   <div
-                    key={t.id}
-                    data-testid={`leaderboard-row-${idx + 1}`}
-                    className="p-3 rounded-2xl flex items-center gap-3"
+                    className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-black text-sm"
                     style={{
-                      background: "hsl(220,30%,11%)",
-                      border:
+                      background:
                         idx === 0
-                          ? "1px solid hsla(40,90%,55%,0.5)"
-                          : "1px solid hsl(220,30%,19%)",
+                          ? "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))"
+                          : idx === 1
+                          ? "hsl(213,36%,44%)"
+                          : "hsl(185,45%,34%)",
+                      color: "white",
                     }}
                   >
-                    <div
-                      className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-black text-sm"
-                      style={{
-                        background:
-                          idx === 0
-                            ? "linear-gradient(135deg, hsl(40,90%,55%), hsl(25,95%,55%))"
-                            : idx === 1
-                            ? "hsl(220,15%,55%)"
-                            : "hsl(25,55%,45%)",
-                        color: "white",
-                      }}
-                    >
-                      {idx + 1}
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate" style={{ color: "hsl(210,20%,92%)" }}>
+                      {t.name}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className="font-bold text-sm truncate"
-                        style={{ color: "hsl(210,20%,92%)" }}
-                      >
-                        {t.name}
-                      </div>
-                      <div
-                        className="text-[11px] truncate"
-                        style={{ color: "hsl(220,15%,60%)" }}
-                      >
-                        {(t.expertise || [])
-                          .map((e) => EXPERTISE_LABELS[e] || e)
-                          .slice(0, 2)
-                          .join(" · ") || "—"}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div
-                        className="font-black text-base"
-                        style={{ color: "hsl(40,90%,70%)" }}
-                      >
-                        {t.vote_count || 0}
-                      </div>
-                      <div
-                        className="text-[9px] font-bold uppercase tracking-widest"
-                        style={{ color: "hsl(220,15%,55%)" }}
-                      >
-                        votes
-                      </div>
+                    <div className="text-[11px] truncate" style={{ color: "hsl(220,15%,60%)" }}>
+                      {t.school || (t.expertise || []).map((e) => EXPERTISE_LABELS[e] || e).slice(0, 2).join(" · ") || "Founding teacher pitch"}
                     </div>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <div className="font-black text-base" style={{ color: "hsl(185,80%,72%)" }}>
+                      {t.vote_count || 0}
+                    </div>
+                    <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "hsl(220,15%,55%)" }}>
+                      votes
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* Inline vote error toast */}
       {voteErr && (
@@ -721,7 +784,7 @@ export default function TeacherHubPage() {
                 data-testid="teacher-hub-empty-cta"
                 className="px-5 py-2.5 rounded-full font-bold text-sm text-white"
                 style={{
-                  background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
+                  background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))",
                 }}
               >
                 Pitch yourself →
@@ -750,8 +813,8 @@ export default function TeacherHubPage() {
           className="p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center gap-5"
           style={{
             background:
-              "linear-gradient(135deg, hsla(280,80%,55%,0.12), hsla(213,100%,55%,0.06))",
-            border: "1px solid hsla(280,80%,55%,0.25)",
+              "linear-gradient(135deg, hsla(185,85%,45%,0.12), hsla(213,100%,55%,0.06))",
+            border: "1px solid hsla(185,85%,45%,0.25)",
           }}
         >
           <div className="flex-1">
@@ -762,7 +825,7 @@ export default function TeacherHubPage() {
               Ready to pitch for a founding seat?
             </h3>
             <p className="text-sm leading-relaxed" style={{ color: "hsl(220,15%,75%)" }}>
-              Selected teachers help turn the Student Edition into practical tools for classrooms,
+              Selected teachers help turn the book into practical tools for classrooms,
               advisory periods, mentoring, and the 300-review local pilot.
             </p>
           </div>
@@ -771,7 +834,7 @@ export default function TeacherHubPage() {
             data-testid="teacher-hub-bottom-cta"
             className="px-6 py-3 rounded-full font-bold text-sm text-white whitespace-nowrap"
             style={{
-              background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
+              background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))",
             }}
           >
             Apply / Pitch Yourself →
@@ -781,12 +844,7 @@ export default function TeacherHubPage() {
 
       <AnimatePresence>
         {showApply && (
-          <ApplyModal
-            onClose={() => setShowApply(false)}
-            onSubmitted={() => {
-              setShowApply(false);
-            }}
-          />
+          <ApplyModal onClose={() => setShowApply(false)} />
         )}
       </AnimatePresence>
     </div>
@@ -795,7 +853,7 @@ export default function TeacherHubPage() {
 
 function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
   const expertise = teacher.expertise || [];
-  const accent = EXPERTISE_COLORS[expertise[0]] || "hsl(280,80%,55%)";
+  const accent = EXPERTISE_COLORS[expertise[0]] || "hsl(185,85%,45%)";
   const voteCount = teacher.vote_count || 0;
   const hasVoted = !!teacher.has_voted;
   return (
@@ -856,8 +914,8 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
                 key={e}
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{
-                  background: `${EXPERTISE_COLORS[e] || "hsl(280,80%,55%)"}22`,
-                  color: EXPERTISE_COLORS[e] || "hsl(280,80%,80%)",
+                  background: `${EXPERTISE_COLORS[e] || "hsl(185,85%,45%)"}22`,
+                  color: EXPERTISE_COLORS[e] || "hsl(185,80%,72%)",
                 }}
               >
                 {EXPERTISE_LABELS[e] || e}
@@ -914,7 +972,7 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
           className="text-[10px] font-bold uppercase tracking-widest mb-1"
           style={{ color: accent }}
         >
-          Why I'm great
+          Founding-seat pitch
         </div>
         <p
           className="text-xs leading-relaxed italic"
@@ -980,7 +1038,7 @@ function TeacherCard({ teacher, index, onVote, voting, viewerCanVote }) {
   );
 }
 
-function ApplyModal({ onClose, onSubmitted }) {
+function ApplyModal({ onClose }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [school, setSchool] = useState("");
@@ -1023,7 +1081,7 @@ function ApplyModal({ onClose, onSubmitted }) {
       picks.length === 0
     ) {
       setErr(
-        "Fill all required fields. Student need, bio, and your pitch each need at least 30 characters, and pick at least one expertise tag."
+        "Fill all required fields. Student need, teacher/student problem, credibility snapshot, and your pitch each need at least 30 characters. Pick at least one expertise tag."
       );
       return;
     }
@@ -1086,15 +1144,15 @@ function ApplyModal({ onClose, onSubmitted }) {
               Application in.
             </h3>
             <p className="text-sm leading-relaxed mb-5" style={{ color: "hsl(220,15%,70%)" }}>
-              Adam reviews every applicant personally. If it's a fit, you'll be
-              considered for the founding Teacher Toolkit Builder cohort.
+              Adam reviews every applicant personally. If it's a fit, your pitch can move into
+              the public voting roster for a founding Teacher Toolkit seat.
             </p>
             <button
               onClick={onClose}
               data-testid="teacher-apply-close-btn"
               className="px-6 py-2.5 rounded-full font-bold text-sm text-white"
               style={{
-                background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
+                background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))",
               }}
             >
               Done
@@ -1104,7 +1162,7 @@ function ApplyModal({ onClose, onSubmitted }) {
           <form onSubmit={submit} data-testid="teacher-apply-form" className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-black text-xl" style={{ color: "hsl(210,20%,95%)" }}>
-                Apply as a Teacher Builder
+                Pitch for a Founding Teacher Seat
               </h2>
               <button
                 type="button"
@@ -1322,7 +1380,7 @@ function ApplyModal({ onClose, onSubmitted }) {
                 onChange={(e) => setWhyGreat(e.target.value)}
                 data-testid="teacher-apply-why-great"
                 rows={3}
-                placeholder="What would make you valuable in a 3-month build with students, teachers, and this book?"
+                placeholder="What would make you valuable in a 30-day build retreat with students, teachers, and this book?"
                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none leading-relaxed"
                 style={{
                   background: "hsl(220,30%,13%)",
@@ -1350,8 +1408,8 @@ function ApplyModal({ onClose, onSubmitted }) {
                 className="mt-0.5"
               />
               <span className="text-xs leading-relaxed" style={{ color: "hsl(220,15%,72%)" }}>
-                I am interested in a 1-month campus working group / retreat-style pilot to test tools,
-                improve them with student feedback, and help shape the Teacher Edition.
+                I am interested in a 30-day campus build retreat to test tools,
+                improve them with student feedback, and help shape the Teacher Toolkit.
               </span>
             </label>
 
@@ -1440,7 +1498,7 @@ function ApplyModal({ onClose, onSubmitted }) {
               data-testid="teacher-apply-submit-btn"
               className="w-full py-3.5 rounded-2xl font-bold text-sm text-white disabled:opacity-50"
               style={{
-                background: "linear-gradient(135deg, hsl(280,80%,55%), hsl(213,100%,55%))",
+                background: "linear-gradient(135deg, hsl(185,85%,45%), hsl(213,100%,55%))",
               }}
             >
               {busy ? "Submitting…" : "Pitch yourself for a founding seat →"}
