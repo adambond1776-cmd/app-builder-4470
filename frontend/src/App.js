@@ -46,6 +46,7 @@ function parsePath() {
   if (pathname === "/pricing") return { type: "pricing" };
   if (pathname === "/aquidneck" || pathname === "/free-books" || pathname === "/free" || pathname === "/free-aquidneck-books" || pathname === "/rhode-island-seniors-free-books") return { type: "aquidneck" };
   if (pathname === "/teachers" || pathname === "/teacher-hub") return { type: "teacher_hub" };
+  if (pathname === "/story" || pathname === "/hidden-genius") return { type: "story" };
   if (pathname === "/payment/return") return { type: "payment_return" };
   if (pathname === "/judge") {
     const token = params.get("token");
@@ -88,8 +89,7 @@ export default function App() {
 
   useEffect(() => {
     if (user !== false) return;
-    try { setScreen(localStorage.getItem("hg_onboarded") === "true" ? "welcome" : "onboarding"); }
-    catch { setScreen("onboarding"); }
+    setScreen("welcome");
   }, [user]);
 
   const handleAuthed = async (u) => { setUser(u); setTrack(u.current_track || ""); };
@@ -160,6 +160,13 @@ export default function App() {
       </div>
     );
   }
+  if (route.type === "story") {
+    return (
+      <div className="flex flex-col h-screen w-full max-w-md mx-auto overflow-hidden" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
+        <HiddenGeniusOnboarding onContinue={() => { window.location.href = "/"; }} />
+      </div>
+    );
+  }
   if (route.type === "judge") {
     return (
       <div className="flex flex-col h-screen w-full max-w-md mx-auto overflow-hidden" style={{ background: "hsl(220,40%,8%)", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }} data-testid="app-root">
@@ -176,7 +183,7 @@ export default function App() {
   } else if (user === false) {
     if (screen === "onboarding") body = <HiddenGeniusOnboarding onContinue={() => { try { localStorage.setItem("hg_onboarded", "true"); } catch {}; setScreen("welcome"); }} />;
     else if (screen === "burners") body = <FourBurnersPage onBack={() => setScreen("welcome")} />;
-    else body = <WelcomeScreen onStart={startLogin} onBack={() => setScreen("onboarding")} onOpenBurners={() => openBurners("welcome")} isAuthed={false} />;
+    else body = <WelcomeScreen onStart={startLogin} onOpenBurners={() => openBurners("welcome")} isAuthed={false} />;
   } else {
     if (screen === "signup_gate") body = <SignupGate user={user} onComplete={async () => { await refreshUser(); setScreen(user.role === "parent" ? "parent_home" : "role_select"); }} onBlocked={handleLogout} />;
     else if (screen === "role_select" || (user.role == null && screen === "home")) body = <RoleSelect user={user} onSelected={async (r) => { await refreshUser(); setScreen(r === "parent" ? "parent_home" : "home"); }} />;
