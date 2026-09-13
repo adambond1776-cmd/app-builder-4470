@@ -3399,19 +3399,79 @@ class WorkbookChatRequest(BaseModel):
     messages: List[ChatMessage]
 
 
+# The eight "working words" from the Genius Mining instrument (Sections A-E).
+# Per the book/instrument, the word is "a starting place" and the student's own
+# sentence is "the important one" — the app treats the word as a mutable hypothesis.
+WORKING_WORDS = [
+    {"id": "teacher", "word": "Teacher", "verb": "EXPLAINED", "means": "makes it make sense to someone else"},
+    {"id": "builder", "word": "Builder", "verb": "BUILT", "means": "makes the thing exist that did not exist"},
+    {"id": "performer", "word": "Performer", "verb": "PERFORMED", "means": "makes a room feel something"},
+    {"id": "organizer", "word": "Organizer", "verb": "SORTED", "means": "makes the mess into an order"},
+    {"id": "connector", "word": "Connector", "verb": "CONNECTED", "means": "makes the introduction that changes things"},
+    {"id": "analyst", "word": "Analyst", "verb": "NOTICED", "means": "finds what is actually going on underneath"},
+    {"id": "fixer", "word": "Fixer", "verb": "REPAIRED", "means": "finds the broken part and repairs it"},
+    {"id": "protector", "word": "Protector", "verb": "PROTECTED", "means": "notices who is being left out or harmed and steps in"},
+]
+WORKING_WORD_IDS = {w["id"] for w in WORKING_WORDS}
+
+# Section F "kinds of work" (v1.4) — reference list of the sixteen.
+KINDS_OF_WORK = [
+    "engines_machines_tools", "video_writing_storytelling", "code_apps_digital",
+    "drawing_design_photography", "building_making", "music_theater_performing",
+    "land_animals_outdoors", "languages_writing_research", "care_medicine_body",
+    "volunteering_community", "business_selling_money", "tutoring_coaching_teaching",
+    "cooking_baking_kitchens", "sport_training_competing", "running_coordinating",
+    "safety_security_protecting",
+]
+
+# Section F fields are consent-gated for minors (v1.4 note). Stored only when
+# section_f_consent is true; otherwise stripped and marked withheld.
+SECTION_F_FIELDS = [
+    "kinds_of_work", "work_style", "expected_path",
+    "training_tolerance", "needs_pay_now",
+]
+
+# Map the survey's self-reported path (F3a) to the app's road label.
+EXPECTED_PATH_TO_LABEL = {
+    "college": "School Track",
+    "trade": "Trade Track",
+    "work": "Work Track",
+    "figuring_it_out": "Figuring It Out Track",
+}
+
+
 class GeniusProfileIn(BaseModel):
+    """The genius_profile contract, grounded in the Genius Mining instrument
+    (v1.3 Sections A-E + v1.4 Section F). Extra keys allowed for forward-compat."""
     model_config = {"extra": "allow"}
+    # identity + provenance + consent
     user_email: Optional[str] = None
+    participant_code: Optional[str] = None
     source: Optional[str] = None
+    version: Optional[str] = None
+    completed_at: Optional[str] = None
+    campus_quest_consent: Optional[bool] = None   # A4 box: share activities/name
+    section_f_consent: Optional[bool] = None       # separate consent for Section F (minors)
+    # Sections A-E (core — always present)
+    working_word: Optional[str] = None             # one of WORKING_WORD_IDS
+    refining_sentence: Optional[str] = None        # D3 — the important one
+    verb_counts: Optional[dict] = None             # B tally
+    top_two_instances: Optional[list] = None       # C1
+    body_response: Optional[str] = None            # C2
+    minute_to_minute: Optional[str] = None         # C3
+    instances: Optional[list] = None               # A1 (durable raw)
+    activities: Optional[list] = None              # A4 (social engagement)
+    # Section F (v1.4 — optional, consent-gated)
+    kinds_of_work: Optional[list] = None
+    work_style: Optional[dict] = None
+    expected_path: Optional[str] = None            # F3a → seeds Track Declaration
+    training_tolerance: Optional[str] = None
+    needs_pay_now: Optional[str] = None
+    # backward-compat aliases (older draft contract)
     primary_genius: Optional[str] = None
-    genius_themes: Optional[list] = None
     thinking_style: Optional[str] = None
-    energy_signals: Optional[dict] = None
     recommended_track: Optional[str] = None
     narrative_summary: Optional[str] = None
-    raw_answers: Optional[list] = None
-    completed_at: Optional[str] = None
-    version: Optional[str] = None
 
 
 async def _tool_status_for_user(user_id: str) -> dict:
@@ -3456,6 +3516,11 @@ async def workbook_overview(user: User = Depends(get_current_user)):
     for r in recent:
         r["tool_title"] = WORKBOOK_TOOLS_BY_ID.get(r["tool_id"], {}).get("title", r["tool_id"])
     genius = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
+    prof = (genius or {}).get("genius_profile")
+    # A pending (un-merged) profile whose survey suggests a road the user hasn't set.
+    suggested_track = None
+    if prof and not user.current_track:
+        suggested_track = EXPECTED_PATH_TO_LABEL.get(prof.get("expected_path"))
     return {
         "current_track": user.current_track,
         "roads": WORKBOOK_ROADS,
@@ -3463,7 +3528,10 @@ async def workbook_overview(user: User = Depends(get_current_user)):
         "due_this_week": due_this_week,
         "war_streak": await _war_streak(user.user_id),
         "recent_entries": recent,
-        "genius_profile": (genius or {}).get("genius_profile"),
+        "genius_profile": _public_genius_profile(prof),
+        "genius_merged": bool(prof and prof.get("merged")),
+        "genius_pending_merge": bool(prof and not prof.get("merged")),
+        "suggested_track": suggested_track,
     }
 
 
@@ -3606,50 +3674,175 @@ async def road_finder_commit(body: RoadCommit, user: User = Depends(get_current_
     return {"ok": True, "current_track": label, "starter_tool": starter}
 
 
+def _normalize_profile(profile: dict) -> dict:
+    """Normalize + consent-gate a genius_profile before it lands in an account.
+    - working_word: lowercase id, accept the older `primary_genius` alias.
+    - expected_path: accept `recommended_track` alias.
+    - Section F fields stripped unless section_f_consent is true (v1.4 minor note).
+    - A4 activities stripped unless campus_quest_consent is true.
+    """
+    p = {k: v for k, v in profile.items() if v is not None}
+
+    ww = (p.get("working_word") or p.get("primary_genius") or "").strip().lower()
+    if ww in WORKING_WORD_IDS:
+        p["working_word"] = ww
+    elif ww:
+        p["working_word"] = ww  # keep whatever they sent; UI shows sentence anyway
+    if not p.get("refining_sentence") and p.get("narrative_summary"):
+        p["refining_sentence"] = p["narrative_summary"]
+    if not p.get("expected_path") and p.get("recommended_track"):
+        p["expected_path"] = p["recommended_track"]
+
+    # Section F consent gate
+    if not p.get("section_f_consent"):
+        withheld = any(f in p for f in SECTION_F_FIELDS)
+        for f in SECTION_F_FIELDS:
+            p.pop(f, None)
+        if withheld:
+            p["section_f_withheld"] = True
+
+    # A4 activities only travel with the activity/contact consent
+    if not p.get("campus_quest_consent"):
+        p.pop("activities", None)
+
+    return p
+
+
+def _public_genius_profile(profile: Optional[dict]) -> Optional[dict]:
+    if not profile:
+        return None
+    # Already gated at storage; return as-is (internal-only keys, if any, could be stripped here).
+    return profile
+
+
 @api_router.get("/workbook/genius-profile")
 async def get_genius_profile(user: User = Depends(get_current_user)):
     doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
-    return {"genius_profile": (doc or {}).get("genius_profile")}
+    prof = (doc or {}).get("genius_profile")
+    return {
+        "genius_profile": _public_genius_profile(prof),
+        "merged": bool(prof and prof.get("merged")),
+        "working_words": WORKING_WORDS,
+    }
 
 
-async def _store_genius_profile(user_id: str, profile: dict):
+async def _store_genius_profile(user_id: str, profile: dict, *, require_consent: bool):
+    """Store a genius_profile as PENDING (merged=False). Applying it to personalize
+    the account (seeding the road) happens only on an explicit in-app merge."""
+    p = _normalize_profile(profile)
+    if require_consent and not p.get("campus_quest_consent"):
+        raise HTTPException(status_code=403, detail="consent_required")
     now = datetime.now(timezone.utc).isoformat()
-    profile = {**profile, "imported_at": now}
-    await db.users.update_one({"user_id": user_id}, {"$set": {"genius_profile": profile}})
+    existing = await db.users.find_one({"user_id": user_id}, {"_id": 0, "genius_profile": 1})
+    was_merged = bool((existing or {}).get("genius_profile", {}).get("merged"))
+    p = {**p, "imported_at": now, "merged": was_merged}
+    await db.users.update_one({"user_id": user_id}, {"$set": {"genius_profile": p}})
     tool = WORKBOOK_TOOLS_BY_ID["genius_mining"]
     await db.workbook_entries.update_one(
         {"user_id": user_id, "tool_id": "genius_mining", "period_key": period_key_for(tool)},
         {"$set": {
             "id": str(uuid.uuid4()), "user_id": user_id, "tool_id": "genius_mining",
-            "period_key": period_key_for(tool), "answers": profile, "ai_reflection": "",
+            "period_key": period_key_for(tool), "answers": p, "ai_reflection": "",
             "created_at": now, "updated_at": now,
         }},
         upsert=True,
     )
-    # If Campus Quest recommends a road and the user hasn't declared one, seed it.
-    rec = profile.get("recommended_track")
-    if rec:
-        rec_label = ROAD_LABELS.get(rec, rec if rec in LABEL_TO_ROAD else None)
-        if rec_label:
-            existing = await db.users.find_one({"user_id": user_id}, {"_id": 0, "current_track": 1})
-            if not (existing or {}).get("current_track"):
-                await db.users.update_one({"user_id": user_id}, {"$set": {"current_track": rec_label}})
+    return p
 
 
 @api_router.post("/workbook/genius-profile")
 async def set_genius_profile_local(body: GeniusProfileIn, user: User = Depends(get_current_user)):
-    """Manual local entry/confirmation until Campus Quest is live."""
+    """Manual local entry/confirmation of one's own profile (student is present, so
+    consent is implicit). Used until Campus Quest is live."""
     profile = body.model_dump(exclude_none=True)
     profile["user_email"] = user.email
     profile["source"] = profile.get("source") or "manual"
-    await _store_genius_profile(user.user_id, profile)
-    return {"ok": True, "genius_profile": (await get_genius_profile(user))["genius_profile"]}
+    profile.setdefault("campus_quest_consent", True)
+    stored = await _store_genius_profile(user.user_id, profile, require_consent=False)
+    return {"ok": True, "genius_profile": stored}
+
+
+class GeniusProfileEdit(BaseModel):
+    working_word: Optional[str] = None
+    refining_sentence: Optional[str] = None
+
+
+@api_router.post("/workbook/genius-profile/edit")
+async def edit_genius_profile(body: GeniusProfileEdit, user: User = Depends(get_current_user)):
+    """Student corrections. The word is 'a starting place'; the sentence leads."""
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
+    prof = (doc or {}).get("genius_profile")
+    if not prof:
+        raise HTTPException(status_code=404, detail="No profile to edit")
+    updates = {}
+    if body.working_word is not None:
+        ww = body.working_word.strip().lower()
+        if ww and ww not in WORKING_WORD_IDS:
+            raise HTTPException(status_code=400, detail="Unknown working word")
+        updates["working_word"] = ww
+        prof["working_word_edited"] = True
+    if body.refining_sentence is not None:
+        updates["refining_sentence"] = body.refining_sentence.strip()[:600]
+    prof.update(updates)
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"genius_profile": prof}})
+    return {"ok": True, "genius_profile": prof}
+
+
+@api_router.post("/workbook/genius-profile/merge")
+async def merge_genius_profile(user: User = Depends(get_current_user)):
+    """Explicit student opt-in: bring the pending Genius Profile fully into MaxCoach
+    and let the app reuse it — chiefly, pre-fill the road from expected_path so we
+    never re-ask a question the survey already answered."""
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1, "current_track": 1})
+    prof = (doc or {}).get("genius_profile")
+    if not prof:
+        raise HTTPException(status_code=404, detail="No Genius Profile to merge")
+    now = datetime.now(timezone.utc).isoformat()
+    prof["merged"] = True
+    prof["merged_at"] = now
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"genius_profile": prof}})
+
+    seeded_track = None
+    ep = prof.get("expected_path")
+    ep_label = EXPECTED_PATH_TO_LABEL.get(ep) if ep else None
+    if ep_label and not (doc or {}).get("current_track"):
+        seeded_track = ep_label
+        await db.users.update_one({"user_id": user.user_id}, {"$set": {"current_track": ep_label}})
+        td = WORKBOOK_TOOLS_BY_ID["track_declaration"]
+        await db.workbook_entries.update_one(
+            {"user_id": user.user_id, "tool_id": "track_declaration", "period_key": period_key_for(td)},
+            {"$set": {
+                "id": str(uuid.uuid4()), "user_id": user.user_id, "tool_id": "track_declaration",
+                "period_key": period_key_for(td),
+                "answers": {"road": ep_label, "road_id": LABEL_TO_ROAD[ep_label], "declared_at": now, "source": "genius_merge"},
+                "ai_reflection": "", "created_at": now, "updated_at": now,
+            }},
+            upsert=True,
+        )
+    return {"ok": True, "merged": True, "seeded_track": seeded_track, "genius_profile": prof}
+
+
+@api_router.post("/workbook/genius-profile/withdraw")
+async def withdraw_genius_profile(user: User = Depends(get_current_user)):
+    """Reversible: remove the imported profile from the MaxCoach account. If the road
+    was seeded by the merge (and not since re-declared by the student), clear it too."""
+    td = WORKBOOK_TOOLS_BY_ID["track_declaration"]
+    td_entry = await db.workbook_entries.find_one(
+        {"user_id": user.user_id, "tool_id": "track_declaration", "period_key": period_key_for(td)}, {"_id": 0, "answers": 1}
+    )
+    if td_entry and (td_entry.get("answers") or {}).get("source") == "genius_merge":
+        await db.users.update_one({"user_id": user.user_id}, {"$set": {"current_track": None}})
+        await db.workbook_entries.delete_many({"user_id": user.user_id, "tool_id": "track_declaration"})
+    await db.users.update_one({"user_id": user.user_id}, {"$unset": {"genius_profile": ""}})
+    await db.workbook_entries.delete_many({"user_id": user.user_id, "tool_id": "genius_mining"})
+    return {"ok": True, "withdrawn": True}
 
 
 @api_router.post("/integrations/campus-quest/genius-profile")
 async def import_genius_profile(body: GeniusProfileIn, request: Request):
     """Server-to-server webhook: Campus Quest pushes a completed Genius Mining
-    profile, keyed by user_email. Guarded by a shared secret when configured."""
+    profile, keyed by user_email. Requires the shared secret and the student's
+    consent. Stored as PENDING — the student still chooses to merge in-app."""
     secret = request.headers.get("x-cq-secret")
     if CAMPUS_QUEST_WEBHOOK_SECRET and secret != CAMPUS_QUEST_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Bad webhook secret")
@@ -3659,8 +3852,8 @@ async def import_genius_profile(body: GeniusProfileIn, request: Request):
     if not user_doc:
         raise HTTPException(status_code=404, detail="No matching user for that email")
     profile = body.model_dump(exclude_none=True)
-    await _store_genius_profile(user_doc["user_id"], profile)
-    return {"ok": True, "linked_user": user_doc["user_id"]}
+    stored = await _store_genius_profile(user_doc["user_id"], profile, require_consent=True)
+    return {"ok": True, "linked_user": user_doc["user_id"], "pending_merge": not stored.get("merged"), "section_f_withheld": stored.get("section_f_withheld", False)}
 
 
 @api_router.post("/workbook/cron/weekly-digest")

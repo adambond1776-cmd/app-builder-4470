@@ -29,7 +29,7 @@ function StatusPill({ tool }) {
   return <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "hsl(220,30%,16%)", color: "hsl(210,20%,80%)" }}>Open</span>;
 }
 
-export default function WorkbookHub({ user, onBack, onOpenTool, onOpenRoadFinder }) {
+export default function WorkbookHub({ user, onBack, onOpenTool, onOpenRoadFinder, onOpenGenius }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -74,6 +74,17 @@ export default function WorkbookHub({ user, onBack, onOpenTool, onOpenRoadFinder
           </motion.button>
         )}
 
+        {/* Pending Genius Profile from Campus Quest — offer to merge */}
+        {data?.genius_pending_merge && (
+          <button onClick={onOpenGenius} data-testid="workbook-merge-prompt" className="w-full text-left p-4 rounded-2xl" style={{ background: "hsla(160,70%,45%,0.1)", border: "1px solid hsla(160,70%,50%,0.35)" }}>
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(160,70%,72%)" }}>Genius Mining · ready to merge</div>
+            <div className="font-black text-base" style={{ color: "hsl(210,20%,95%)" }}>Your Genius Profile is waiting →</div>
+            <div className="text-[11px] mt-0.5" style={{ color: "hsl(220,15%,62%)" }}>
+              {data.suggested_track ? `Campus Quest suggests ${data.suggested_track}. Merge to bring it in.` : "Merge it into MaxCoach to personalize your coaching."}
+            </div>
+          </button>
+        )}
+
         {/* Due this week */}
         {data?.due_this_week?.length > 0 && (
           <div className="p-4 rounded-2xl" style={{ background: "hsla(25,100%,55%,0.08)", border: "1px solid hsla(25,100%,55%,0.28)" }}>
@@ -89,15 +100,13 @@ export default function WorkbookHub({ user, onBack, onOpenTool, onOpenRoadFinder
           </div>
         )}
 
-        {/* Genius profile */}
-        {data?.genius_profile && (
-          <div className="p-4 rounded-2xl" style={{ background: "hsla(160,70%,45%,0.08)", border: "1px solid hsla(160,70%,50%,0.28)" }}>
-            <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(160,70%,72%)" }}>Genius Mining</div>
-            <div className="font-black text-base" style={{ color: "hsl(210,20%,95%)" }}>{data.genius_profile.primary_genius || "Profile synced"}</div>
-            {data.genius_profile.thinking_style && (
-              <div className="text-xs mt-1" style={{ color: "hsl(220,15%,62%)" }}>{data.genius_profile.thinking_style}</div>
-            )}
-          </div>
+        {/* Genius profile (merged) */}
+        {data?.genius_profile && data?.genius_merged && (
+          <button onClick={onOpenGenius} data-testid="workbook-genius-card" className="w-full text-left p-4 rounded-2xl" style={{ background: "hsla(160,70%,45%,0.08)", border: "1px solid hsla(160,70%,50%,0.28)" }}>
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(160,70%,72%)" }}>Genius Profile</div>
+            <div className="font-bold text-sm leading-snug" style={{ color: "hsl(210,20%,95%)" }}>{data.genius_profile.refining_sentence || "Profile synced"}</div>
+            <div className="text-[11px] mt-1" style={{ color: "hsl(220,15%,60%)" }}>Working word: {data.genius_profile.working_word}</div>
+          </button>
         )}
 
         {/* The toolkit */}
@@ -105,8 +114,8 @@ export default function WorkbookHub({ user, onBack, onOpenTool, onOpenRoadFinder
           <div className="text-[10px] font-bold uppercase tracking-widest mb-2 px-1" style={{ color: "hsl(220,15%,55%)" }}>The Toolkit · 8 tools</div>
           <div className="space-y-2">
             {(data?.tools || []).map((t, i) => {
-              const clickable = t.status === "live" || t.status === "ai";
-              const onClick = t.status === "ai" ? onOpenRoadFinder : (t.status === "live" ? () => onOpenTool(t.id) : undefined);
+              const clickable = t.status === "live" || t.status === "ai" || t.status === "import";
+              const onClick = t.status === "ai" ? onOpenRoadFinder : (t.status === "live" ? () => onOpenTool(t.id) : (t.status === "import" ? onOpenGenius : undefined));
               return (
                 <motion.button
                   key={t.id}
