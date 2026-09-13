@@ -11,13 +11,15 @@ const BURNERS = [
 
 export default function HomeScreen({
   user, onContinueChat, onOpenMemory, onOpenBurners, onPickTrack, onApplyFounding,
-  onOpenMaxPitch, onOpenKidAcceptInvite, onOpenMiles, onOpenGeniusStack, onLogout,
+  onOpenMaxPitch, onOpenKidAcceptInvite, onOpenMiles, onOpenGeniusStack, onOpenWorkbook, onLogout,
 }) {
   const [f20, setF20] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [wb, setWb] = useState(null);
 
   useEffect(() => {
     apiJSON("/founding20/status").then(setF20).catch(() => {});
+    apiJSON("/workbook/overview").then(setWb).catch(() => {});
   }, []);
 
   const firstName = (user.name || "").split(" ")[0] || "there";
@@ -88,6 +90,36 @@ export default function HomeScreen({
             : "Choose how you're moving through life right now — Max coaches accordingly."}
         </div>
       </motion.button>
+
+      {/* My Workbook — the digital Business of Life */}
+      {onOpenWorkbook && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={onOpenWorkbook}
+          data-testid="home-workbook-cta"
+          className="text-left mb-4 p-4 rounded-2xl flex items-center justify-between"
+          style={{ background: "hsl(220,35%,11%)", border: "1px solid hsla(213,100%,60%,0.28)" }}
+        >
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "hsl(213,100%,65%)" }}>My Workbook</div>
+            <div className="font-black text-base" style={{ color: "hsl(210,20%,95%)" }}>
+              {wb && wb.due_this_week?.length > 0
+                ? `${wb.due_this_week.length} page${wb.due_this_week.length === 1 ? "" : "s"} due this week`
+                : wb && !wb.current_track
+                  ? "Find your road →"
+                  : "The Business of Life, one page at a time"}
+            </div>
+            <div className="text-[11px] mt-0.5" style={{ color: "hsl(220,15%,60%)" }}>
+              {wb?.current_track ? `${wb.current_track} · ${wb.war_streak || 0} week streak` : "8 tools · track your progress for years"}
+            </div>
+          </div>
+          {wb && wb.due_this_week?.length > 0 && (
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ml-2" style={{ background: "hsl(25,100%,58%)", color: "white" }}>{wb.due_this_week.length}</div>
+          )}
+        </motion.button>
+      )}
 
       {/* Compact secondary row — Miles · Pitch · Genius Stack */}
       <div className="grid grid-cols-3 gap-2 mb-4">
