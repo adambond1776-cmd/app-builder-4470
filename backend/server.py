@@ -3298,6 +3298,733 @@ async def admin_teacher_set_status(
     return {"ok": True, "status": body.status}
 
 
+# =====================================================================
+# THE DIGITAL WORKBOOK  —  The Business of Life, as a living app
+# ---------------------------------------------------------------------
+# Turns the book's 8 tools into fillable "pages" with cadence, a durable
+# multi-year entry history, weekly reminders, and Max reflections.
+# Genius Mining is owned by the Campus Quest app and imported here via a
+# stubbed webhook (see /integrations/campus-quest/genius-profile).
+# =====================================================================
+
+CAMPUS_QUEST_WEBHOOK_SECRET = os.environ.get("CAMPUS_QUEST_WEBHOOK_SECRET")
+
+# The four roads. `label` matches the existing current_track values so Max's
+# TRACK_COACHING context keeps working unchanged.
+WORKBOOK_ROADS = [
+    {"id": "college", "label": "School Track", "emoji": "🎓", "starter_tool": "weekly_architecture_review"},
+    {"id": "work", "label": "Work Track", "emoji": "💼", "starter_tool": "energy_audit"},
+    {"id": "trade", "label": "Trade Track", "emoji": "🔧", "starter_tool": "energy_audit"},
+    {"id": "figuring_it_out", "label": "Figuring It Out Track", "emoji": "🔍", "starter_tool": "genius_mining"},
+]
+ROAD_LABELS = {r["id"]: r["label"] for r in WORKBOOK_ROADS}
+LABEL_TO_ROAD = {r["label"]: r["id"] for r in WORKBOOK_ROADS}
+
+# Weekly Architecture Review — faithful to the book (Tool 1). Four burners,
+# three-to-four honest prompts each, plus a closing snapshot.
+_WAR_SECTIONS = [
+    {
+        "id": "work",
+        "title": "Burner 1 — Work / Academics / Training",
+        "quote": "Education is not the filling of a pail, but the lighting of a fire. — W.B. Yeats",
+        "fields": [
+            {"id": "went_well", "type": "textarea", "label": "What went well this week?"},
+            {"id": "heavy_avoided", "type": "textarea", "label": "What felt heavy or got avoided?"},
+            {"id": "decision_putting_off", "type": "textarea", "label": "One decision I've been putting off:"},
+            {"id": "differently", "type": "textarea", "label": "One thing I'll do differently next week:"},
+        ],
+    },
+    {
+        "id": "relationships",
+        "title": "Burner 2 — Relationships & Social",
+        "quote": "You are the average of the five people you spend the most time with. — Jim Rohn",
+        "fields": [
+            {"id": "real_energizing", "type": "textarea", "label": "One interaction this week that felt real and energizing:"},
+            {"id": "surface_only", "type": "textarea", "label": "One relationship running on a surface level only:"},
+            {"id": "action", "type": "textarea", "label": "One specific action I'll take this week:"},
+            {"id": "costing_more", "type": "textarea", "label": "Is there a relationship costing more than it's returning?"},
+        ],
+    },
+    {
+        "id": "health",
+        "title": "Burner 3 — Health",
+        "quote": "Take care of your body. It's the only place you have to live. — Jim Rohn",
+        "fields": [
+            {"id": "body_feel", "type": "scale", "min": 1, "max": 10, "label": "How did my body feel most days this week?"},
+            {"id": "sleep_avg", "type": "text", "label": "Sleep average this week:"},
+            {"id": "energy_leak", "type": "textarea", "label": "Biggest energy leak:"},
+            {"id": "adjustment", "type": "textarea", "label": "One adjustment I'll test for 7 days:"},
+        ],
+    },
+    {
+        "id": "self",
+        "title": "Burner 4 — Self",
+        "quote": "Knowing yourself is the beginning of all wisdom. — Aristotle",
+        "fields": [
+            {"id": "felt_myself", "type": "textarea", "label": "One moment I felt like myself — genuinely, not performing:"},
+            {"id": "going_motions", "type": "textarea", "label": "One situation where I was going through the motions:"},
+            {"id": "avoiding", "type": "textarea", "label": "One conversation or decision I've been avoiding:"},
+            {"id": "proud", "type": "textarea", "label": "One thing I'm proud of this week that nobody else knows:"},
+        ],
+    },
+    {
+        "id": "closing",
+        "title": "Closing Snapshot",
+        "fields": [
+            {"id": "friction_level", "type": "scale", "min": 1, "max": 10, "label": "Overall friction level this week:"},
+            {"id": "fix_one_thing", "type": "textarea", "label": "If I only fixed one thing next week, it would be:"},
+            {"id": "carry_sentence", "type": "text", "label": "One sentence to carry into next week:"},
+        ],
+    },
+]
+
+# The full 8-tool toolkit. `status`: live | coming_soon | import | ai.
+WORKBOOK_TOOLS = [
+    {
+        "id": "track_declaration", "title": "Track Declaration", "tool_no": 0,
+        "subtitle": "Choose your road — college, work, trade, or figuring it out — and the one thing it demands right now.",
+        "cadence": "once", "status": "ai", "roads": "all", "starter_for": [],
+        "coaching": "Help them commit to ONE current road (School/Work/Trade/Figuring It Out). Don't push a track; surface the real signal, separate genuine pull from inherited expectation, and name the single thing that road demands right now.",
+    },
+    {
+        "id": "weekly_architecture_review", "title": "The Weekly Architecture Review", "tool_no": 1,
+        "subtitle": "Once a week. Thirty minutes. Review all four burners: what performed, what drifted, what to decide.",
+        "cadence": "weekly", "status": "live", "roads": "all", "starter_for": ["college"],
+        "quote": "What gets measured gets managed. — Peter Drucker",
+        "sections": _WAR_SECTIONS,
+        "coaching": "Reflect on a Weekly Architecture Review. Name which burner is running hot and which is cold, one honest observation, and the single most important move for next week.",
+    },
+    {
+        "id": "energy_audit", "title": "The Energy Audit", "tool_no": 2,
+        "subtitle": "For seven days, track where your energy goes and what it produces — then see your leaks and your highest-return investments.",
+        "cadence": "weekly", "status": "coming_soon", "roads": "all", "starter_for": ["work", "trade"],
+        "quote": "Energy, not time, is the fundamental currency of high performance. — Loehr & Schwartz",
+    },
+    {
+        "id": "signal_board", "title": "The Signal Board", "tool_no": 3,
+        "subtitle": "Capture the weak signals — the small things drifting — before they become loud problems.",
+        "cadence": "weekly", "status": "coming_soon", "roads": "all", "starter_for": [],
+    },
+    {
+        "id": "operating_agreement", "title": "The Operating Agreement", "tool_no": 4,
+        "subtitle": "The standards and boundaries you agree to run yourself by.",
+        "cadence": "once", "status": "coming_soon", "roads": "all", "starter_for": [],
+    },
+    {
+        "id": "presence_protocol", "title": "The Presence Protocol", "tool_no": 5,
+        "subtitle": "An in-the-moment reset to get fully present when it matters.",
+        "cadence": "on_demand", "status": "coming_soon", "roads": "all", "starter_for": [],
+    },
+    {
+        "id": "foundation_sprint_90", "title": "The 90-Day Foundation Sprint", "tool_no": 6,
+        "subtitle": "Metrics, milestones, and a reset protocol for your current road — a focused 90-day build.",
+        "cadence": "quarterly", "status": "coming_soon", "roads": "all", "starter_for": [],
+    },
+    {
+        "id": "genius_mining", "title": "Genius Mining", "tool_no": 7,
+        "subtitle": "Understand how you actually think and what lights you up. Completed in Campus Quest and synced here.",
+        "cadence": "once", "status": "import", "roads": "all", "starter_for": ["figuring_it_out"],
+        "coaching": "Debrief their Genius Mining results. Connect their strengths and thinking style to a concrete next experiment on their road.",
+    },
+    {
+        "id": "household_checkin", "title": "The Household Weekly Check-In", "tool_no": 8,
+        "subtitle": "A weekly family alignment — for the parent/Family OS side.",
+        "cadence": "weekly", "status": "coming_soon", "roads": ["family"], "starter_for": [],
+    },
+]
+WORKBOOK_TOOLS_BY_ID = {t["id"]: t for t in WORKBOOK_TOOLS}
+
+
+def _public_tool(t: dict) -> dict:
+    """Strip internal-only fields (coaching prompts) before sending to client."""
+    return {k: v for k, v in t.items() if k != "coaching"}
+
+
+def iso_week_key(dt: Optional[datetime] = None) -> str:
+    dt = dt or datetime.now(timezone.utc)
+    iso = dt.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def period_key_for(tool: dict, dt: Optional[datetime] = None) -> str:
+    """The period bucket an entry belongs to, based on the tool's cadence."""
+    dt = dt or datetime.now(timezone.utc)
+    cadence = tool.get("cadence")
+    if cadence == "weekly":
+        return iso_week_key(dt)
+    if cadence == "quarterly":
+        q = (dt.month - 1) // 3 + 1
+        return f"{dt.year}-Q{q}"
+    if cadence == "once":
+        return "all"
+    return dt.strftime("%Y-%m-%d")  # on_demand / daily
+
+
+async def _war_streak(user_id: str) -> int:
+    """Consecutive weeks (through last week) with a Weekly Architecture Review."""
+    docs = await db.workbook_entries.find(
+        {"user_id": user_id, "tool_id": "weekly_architecture_review"},
+        {"_id": 0, "period_key": 1},
+    ).to_list(520)
+    weeks = {d["period_key"] for d in docs}
+    if not weeks:
+        return 0
+    streak = 0
+    cursor = datetime.now(timezone.utc)
+    # Allow the current week to be unfilled without breaking the streak.
+    if iso_week_key(cursor) not in weeks:
+        cursor -= timedelta(days=7)
+    while iso_week_key(cursor) in weeks:
+        streak += 1
+        cursor -= timedelta(days=7)
+    return streak
+
+
+async def build_workbook_reflection(user: User, tool: dict, answers: dict) -> str:
+    """Max reflects on a freshly saved workbook page. Empty string if no LLM."""
+    if not EMERGENT_KEY:
+        return ""
+    lines = []
+    for section in tool.get("sections", []):
+        for f in section["fields"]:
+            val = answers.get(f["id"])
+            if val not in (None, "", []):
+                lines.append(f"{f['label']} {val}")
+    if not lines:
+        return ""
+    track = user.current_track or ""
+    coaching = tool.get("coaching", "Reflect helpfully on this entry.")
+    prompt = (
+        f"{coaching}\n\nThe young person is on the {track or 'undeclared'} road.\n\n"
+        f"Their entry:\n" + "\n".join(lines) +
+        "\n\nWrite 3-4 short sentences, direct and warm, no preamble."
+    )
+    client = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"workbook-{user.user_id}-{uuid.uuid4().hex[:6]}",
+        system_message="You are Max, a sharp, caring life coach. Be specific and brief. No preamble.",
+    ).with_model("anthropic", MAIN_CHAT_MODEL).with_params(max_tokens=MAX_REPLY_TOKENS)
+    try:
+        out = await client.send_message(UserMessage(text=prompt))
+        return out.strip()[:1500]
+    except Exception as e:
+        logger.warning(f"Workbook reflection failed: {e}")
+        return ""
+
+
+class WorkbookEntryCreate(BaseModel):
+    answers: dict = Field(default_factory=dict)
+    period_key: Optional[str] = None
+
+
+class RoadCommit(BaseModel):
+    track: str
+
+
+class WorkbookChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
+# The eight "working words" from the Genius Mining instrument (Sections A-E).
+# Per the book/instrument, the word is "a starting place" and the student's own
+# sentence is "the important one" — the app treats the word as a mutable hypothesis.
+WORKING_WORDS = [
+    {"id": "teacher", "word": "Teacher", "verb": "EXPLAINED", "means": "makes it make sense to someone else"},
+    {"id": "builder", "word": "Builder", "verb": "BUILT", "means": "makes the thing exist that did not exist"},
+    {"id": "performer", "word": "Performer", "verb": "PERFORMED", "means": "makes a room feel something"},
+    {"id": "organizer", "word": "Organizer", "verb": "SORTED", "means": "makes the mess into an order"},
+    {"id": "connector", "word": "Connector", "verb": "CONNECTED", "means": "makes the introduction that changes things"},
+    {"id": "analyst", "word": "Analyst", "verb": "NOTICED", "means": "finds what is actually going on underneath"},
+    {"id": "fixer", "word": "Fixer", "verb": "REPAIRED", "means": "finds the broken part and repairs it"},
+    {"id": "protector", "word": "Protector", "verb": "PROTECTED", "means": "notices who is being left out or harmed and steps in"},
+]
+WORKING_WORD_IDS = {w["id"] for w in WORKING_WORDS}
+
+# Section F "kinds of work" (v1.4) — reference list of the sixteen.
+KINDS_OF_WORK = [
+    "engines_machines_tools", "video_writing_storytelling", "code_apps_digital",
+    "drawing_design_photography", "building_making", "music_theater_performing",
+    "land_animals_outdoors", "languages_writing_research", "care_medicine_body",
+    "volunteering_community", "business_selling_money", "tutoring_coaching_teaching",
+    "cooking_baking_kitchens", "sport_training_competing", "running_coordinating",
+    "safety_security_protecting",
+]
+
+# Section F fields are consent-gated for minors (v1.4 note). Stored only when
+# section_f_consent is true; otherwise stripped and marked withheld.
+SECTION_F_FIELDS = [
+    "kinds_of_work", "work_style", "expected_path",
+    "training_tolerance", "needs_pay_now",
+]
+
+# Map the survey's self-reported path (F3a) to the app's road label.
+EXPECTED_PATH_TO_LABEL = {
+    "college": "School Track",
+    "trade": "Trade Track",
+    "work": "Work Track",
+    "figuring_it_out": "Figuring It Out Track",
+}
+
+
+class GeniusProfileIn(BaseModel):
+    """The genius_profile contract, grounded in the Genius Mining instrument
+    (v1.3 Sections A-E + v1.4 Section F). Extra keys allowed for forward-compat."""
+    model_config = {"extra": "allow"}
+    # identity + provenance + consent
+    user_email: Optional[str] = None
+    participant_code: Optional[str] = None
+    source: Optional[str] = None
+    version: Optional[str] = None
+    completed_at: Optional[str] = None
+    campus_quest_consent: Optional[bool] = None   # A4 box: share activities/name
+    section_f_consent: Optional[bool] = None       # separate consent for Section F (minors)
+    # Sections A-E (core — always present)
+    working_word: Optional[str] = None             # one of WORKING_WORD_IDS
+    refining_sentence: Optional[str] = None        # D3 — the important one
+    verb_counts: Optional[dict] = None             # B tally
+    top_two_instances: Optional[list] = None       # C1
+    body_response: Optional[str] = None            # C2
+    minute_to_minute: Optional[str] = None         # C3
+    instances: Optional[list] = None               # A1 (durable raw)
+    activities: Optional[list] = None              # A4 (social engagement)
+    # Section F (v1.4 — optional, consent-gated)
+    kinds_of_work: Optional[list] = None
+    work_style: Optional[dict] = None
+    expected_path: Optional[str] = None            # F3a → seeds Track Declaration
+    training_tolerance: Optional[str] = None
+    needs_pay_now: Optional[str] = None
+    # backward-compat aliases (older draft contract)
+    primary_genius: Optional[str] = None
+    thinking_style: Optional[str] = None
+    recommended_track: Optional[str] = None
+    narrative_summary: Optional[str] = None
+
+
+async def _tool_status_for_user(user_id: str) -> dict:
+    """Per-tool last_completed / due state for a user."""
+    docs = await db.workbook_entries.find(
+        {"user_id": user_id}, {"_id": 0, "tool_id": 1, "period_key": 1, "created_at": 1}
+    ).to_list(2000)
+    latest: dict = {}
+    periods: dict = {}
+    for d in docs:
+        tid = d["tool_id"]
+        periods.setdefault(tid, set()).add(d.get("period_key"))
+        if tid not in latest or d.get("created_at", "") > latest[tid]:
+            latest[tid] = d.get("created_at", "")
+    status = {}
+    for t in WORKBOOK_TOOLS:
+        tid = t["id"]
+        this_period = period_key_for(t)
+        done_this_period = this_period in periods.get(tid, set())
+        due = t["status"] in ("live",) and t["cadence"] in ("weekly", "quarterly") and not done_this_period
+        status[tid] = {
+            "last_completed": latest.get(tid),
+            "current_period": this_period,
+            "done_this_period": done_this_period,
+            "due": due,
+            "entry_count": len(periods.get(tid, set())),
+        }
+    return status
+
+
+@api_router.get("/workbook/overview")
+async def workbook_overview(user: User = Depends(get_current_user)):
+    status = await _tool_status_for_user(user.user_id)
+    due_this_week = [
+        {"tool_id": t["id"], "title": t["title"], "cadence": t["cadence"]}
+        for t in WORKBOOK_TOOLS
+        if status[t["id"]]["due"]
+    ]
+    recent = await db.workbook_entries.find(
+        {"user_id": user.user_id}, {"_id": 0, "id": 1, "tool_id": 1, "period_key": 1, "created_at": 1}
+    ).sort("created_at", -1).limit(6).to_list(6)
+    for r in recent:
+        r["tool_title"] = WORKBOOK_TOOLS_BY_ID.get(r["tool_id"], {}).get("title", r["tool_id"])
+    genius = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
+    prof = (genius or {}).get("genius_profile")
+    # A pending (un-merged) profile whose survey suggests a road the user hasn't set.
+    suggested_track = None
+    if prof and not user.current_track:
+        suggested_track = EXPECTED_PATH_TO_LABEL.get(prof.get("expected_path"))
+    return {
+        "current_track": user.current_track,
+        "roads": WORKBOOK_ROADS,
+        "tools": [{**_public_tool(t), "state": status[t["id"]]} for t in WORKBOOK_TOOLS],
+        "due_this_week": due_this_week,
+        "war_streak": await _war_streak(user.user_id),
+        "recent_entries": recent,
+        "genius_profile": _public_genius_profile(prof),
+        "genius_merged": bool(prof and prof.get("merged")),
+        "genius_pending_merge": bool(prof and not prof.get("merged")),
+        "suggested_track": suggested_track,
+    }
+
+
+@api_router.get("/workbook/tools/{tool_id}")
+async def workbook_tool_detail(tool_id: str, user: User = Depends(get_current_user)):
+    tool = WORKBOOK_TOOLS_BY_ID.get(tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Unknown tool")
+    entries = await db.workbook_entries.find(
+        {"user_id": user.user_id, "tool_id": tool_id}, {"_id": 0}
+    ).sort("created_at", -1).limit(52).to_list(52)
+    return {
+        "tool": _public_tool(tool),
+        "entries": entries,
+        "current_period": period_key_for(tool),
+    }
+
+
+@api_router.post("/workbook/tools/{tool_id}/entries")
+async def workbook_save_entry(
+    tool_id: str, body: WorkbookEntryCreate, user: User = Depends(get_current_user)
+):
+    tool = WORKBOOK_TOOLS_BY_ID.get(tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Unknown tool")
+    if tool["status"] != "live":
+        raise HTTPException(status_code=400, detail="This tool isn't fillable yet")
+    if not isinstance(body.answers, dict) or not any(
+        v not in (None, "", []) for v in body.answers.values()
+    ):
+        raise HTTPException(status_code=400, detail="Fill in at least one field")
+
+    period = body.period_key or period_key_for(tool)
+    now = datetime.now(timezone.utc).isoformat()
+    reflection = await build_workbook_reflection(user, tool, body.answers)
+
+    existing = await db.workbook_entries.find_one(
+        {"user_id": user.user_id, "tool_id": tool_id, "period_key": period}, {"_id": 0, "id": 1, "created_at": 1}
+    )
+    if existing:
+        entry_id = existing["id"]
+        await db.workbook_entries.update_one(
+            {"user_id": user.user_id, "tool_id": tool_id, "period_key": period},
+            {"$set": {"answers": body.answers, "ai_reflection": reflection, "updated_at": now}},
+        )
+        created_at = existing.get("created_at", now)
+    else:
+        entry_id = str(uuid.uuid4())
+        created_at = now
+        await db.workbook_entries.insert_one({
+            "id": entry_id,
+            "user_id": user.user_id,
+            "tool_id": tool_id,
+            "period_key": period,
+            "answers": body.answers,
+            "ai_reflection": reflection,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    return {
+        "ok": True,
+        "entry": {
+            "id": entry_id, "tool_id": tool_id, "period_key": period,
+            "answers": body.answers, "ai_reflection": reflection,
+            "created_at": created_at, "updated_at": now,
+        },
+        "war_streak": await _war_streak(user.user_id),
+    }
+
+
+ROAD_FINDER_SYSTEM = """You are Max, running the Track Declaration from The Business of Life.
+Your ONE job in this short conversation: help this young person commit to ONE current road for the next 12 months — School (college/academics), Work (career/job), Trade (apprenticeship/skilled craft), or Figuring It Out (no clear path yet).
+
+Rules:
+- Keep every reply to 2-4 sentences. Ask ONE sharp question at a time.
+- Don't push a track. Surface the real signal; separate genuine pull from inherited expectation (parents, peers, pressure).
+- "Figuring It Out" is a legitimate, strong choice — not a failure.
+- Once they lean clearly toward one, reflect it back, name the ONE thing that road demands from them right now, and tell them to tap the road below to lock it in.
+Do not list all four roads mechanically. Coach like a person."""
+
+
+@api_router.post("/workbook/road-finder/chat")
+async def road_finder_chat(req: WorkbookChatRequest, user: User = Depends(get_current_user)):
+    if not req.messages or req.messages[-1].role != "user":
+        raise HTTPException(status_code=400, detail="last message must be user")
+    if not EMERGENT_KEY:
+        return {
+            "message": "I can't run the live conversation right now, but you don't need me to start. "
+                       "Read the four roads below and tap the one that most matches where you actually are — "
+                       "not where you wish you were. You can always change it later.",
+            "llm_available": False,
+        }
+    prior = req.messages[:-1][-8:]
+    transcript = ""
+    if prior:
+        lines = [f"{'User' if m.role == 'user' else 'Max'}: {m.content}" for m in prior]
+        transcript = "\n\nRECENT CONVERSATION:\n" + "\n".join(lines)
+    client = LlmChat(
+        api_key=EMERGENT_KEY,
+        session_id=f"roadfinder-{user.user_id}-{uuid.uuid4().hex[:6]}",
+        system_message=ROAD_FINDER_SYSTEM + transcript,
+    ).with_model("anthropic", MAIN_CHAT_MODEL).with_params(max_tokens=MAX_REPLY_TOKENS)
+    try:
+        reply = await client.send_message(UserMessage(text=req.messages[-1].content))
+    except Exception as e:
+        logger.exception("Road finder LLM error")
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": reply.strip(), "llm_available": True}
+
+
+@api_router.post("/workbook/road-finder/commit")
+async def road_finder_commit(body: RoadCommit, user: User = Depends(get_current_user)):
+    label = body.track.strip()
+    # Accept either a road id ("college") or the display label ("School Track").
+    if label in ROAD_LABELS:
+        label = ROAD_LABELS[label]
+    if label not in LABEL_TO_ROAD:
+        raise HTTPException(status_code=400, detail="Unknown road")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"current_track": label}})
+
+    tool = WORKBOOK_TOOLS_BY_ID["track_declaration"]
+    period = period_key_for(tool)
+    entry = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "tool_id": "track_declaration",
+        "period_key": period,
+        "answers": {"road": label, "road_id": LABEL_TO_ROAD[label], "declared_at": now},
+        "ai_reflection": "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.workbook_entries.update_one(
+        {"user_id": user.user_id, "tool_id": "track_declaration", "period_key": period},
+        {"$set": entry}, upsert=True,
+    )
+    starter = next((r["starter_tool"] for r in WORKBOOK_ROADS if r["label"] == label), None)
+    return {"ok": True, "current_track": label, "starter_tool": starter}
+
+
+def _normalize_profile(profile: dict) -> dict:
+    """Normalize + consent-gate a genius_profile before it lands in an account.
+    - working_word: lowercase id, accept the older `primary_genius` alias.
+    - expected_path: accept `recommended_track` alias.
+    - Section F fields stripped unless section_f_consent is true (v1.4 minor note).
+    - A4 activities stripped unless campus_quest_consent is true.
+    """
+    p = {k: v for k, v in profile.items() if v is not None}
+
+    ww = (p.get("working_word") or p.get("primary_genius") or "").strip().lower()
+    if ww in WORKING_WORD_IDS:
+        p["working_word"] = ww
+    elif ww:
+        p["working_word"] = ww  # keep whatever they sent; UI shows sentence anyway
+    if not p.get("refining_sentence") and p.get("narrative_summary"):
+        p["refining_sentence"] = p["narrative_summary"]
+    if not p.get("expected_path") and p.get("recommended_track"):
+        p["expected_path"] = p["recommended_track"]
+
+    # Section F consent gate
+    if not p.get("section_f_consent"):
+        withheld = any(f in p for f in SECTION_F_FIELDS)
+        for f in SECTION_F_FIELDS:
+            p.pop(f, None)
+        if withheld:
+            p["section_f_withheld"] = True
+
+    # A4 activities only travel with the activity/contact consent
+    if not p.get("campus_quest_consent"):
+        p.pop("activities", None)
+
+    return p
+
+
+def _public_genius_profile(profile: Optional[dict]) -> Optional[dict]:
+    if not profile:
+        return None
+    # Already gated at storage; return as-is (internal-only keys, if any, could be stripped here).
+    return profile
+
+
+@api_router.get("/workbook/genius-profile")
+async def get_genius_profile(user: User = Depends(get_current_user)):
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
+    prof = (doc or {}).get("genius_profile")
+    return {
+        "genius_profile": _public_genius_profile(prof),
+        "merged": bool(prof and prof.get("merged")),
+        "working_words": WORKING_WORDS,
+    }
+
+
+async def _store_genius_profile(user_id: str, profile: dict, *, require_consent: bool):
+    """Store a genius_profile as PENDING (merged=False). Applying it to personalize
+    the account (seeding the road) happens only on an explicit in-app merge."""
+    p = _normalize_profile(profile)
+    if require_consent and not p.get("campus_quest_consent"):
+        raise HTTPException(status_code=403, detail="consent_required")
+    now = datetime.now(timezone.utc).isoformat()
+    existing = await db.users.find_one({"user_id": user_id}, {"_id": 0, "genius_profile": 1})
+    was_merged = bool((existing or {}).get("genius_profile", {}).get("merged"))
+    p = {**p, "imported_at": now, "merged": was_merged}
+    await db.users.update_one({"user_id": user_id}, {"$set": {"genius_profile": p}})
+    tool = WORKBOOK_TOOLS_BY_ID["genius_mining"]
+    await db.workbook_entries.update_one(
+        {"user_id": user_id, "tool_id": "genius_mining", "period_key": period_key_for(tool)},
+        {"$set": {
+            "id": str(uuid.uuid4()), "user_id": user_id, "tool_id": "genius_mining",
+            "period_key": period_key_for(tool), "answers": p, "ai_reflection": "",
+            "created_at": now, "updated_at": now,
+        }},
+        upsert=True,
+    )
+    return p
+
+
+@api_router.post("/workbook/genius-profile")
+async def set_genius_profile_local(body: GeniusProfileIn, user: User = Depends(get_current_user)):
+    """Manual local entry/confirmation of one's own profile (student is present, so
+    consent is implicit). Used until Campus Quest is live."""
+    profile = body.model_dump(exclude_none=True)
+    profile["user_email"] = user.email
+    profile["source"] = profile.get("source") or "manual"
+    profile.setdefault("campus_quest_consent", True)
+    stored = await _store_genius_profile(user.user_id, profile, require_consent=False)
+    return {"ok": True, "genius_profile": stored}
+
+
+class GeniusProfileEdit(BaseModel):
+    working_word: Optional[str] = None
+    refining_sentence: Optional[str] = None
+
+
+@api_router.post("/workbook/genius-profile/edit")
+async def edit_genius_profile(body: GeniusProfileEdit, user: User = Depends(get_current_user)):
+    """Student corrections. The word is 'a starting place'; the sentence leads."""
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1})
+    prof = (doc or {}).get("genius_profile")
+    if not prof:
+        raise HTTPException(status_code=404, detail="No profile to edit")
+    updates = {}
+    if body.working_word is not None:
+        ww = body.working_word.strip().lower()
+        if ww and ww not in WORKING_WORD_IDS:
+            raise HTTPException(status_code=400, detail="Unknown working word")
+        updates["working_word"] = ww
+        prof["working_word_edited"] = True
+    if body.refining_sentence is not None:
+        updates["refining_sentence"] = body.refining_sentence.strip()[:600]
+    prof.update(updates)
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"genius_profile": prof}})
+    return {"ok": True, "genius_profile": prof}
+
+
+@api_router.post("/workbook/genius-profile/merge")
+async def merge_genius_profile(user: User = Depends(get_current_user)):
+    """Explicit student opt-in: bring the pending Genius Profile fully into MaxCoach
+    and let the app reuse it — chiefly, pre-fill the road from expected_path so we
+    never re-ask a question the survey already answered."""
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "genius_profile": 1, "current_track": 1})
+    prof = (doc or {}).get("genius_profile")
+    if not prof:
+        raise HTTPException(status_code=404, detail="No Genius Profile to merge")
+    now = datetime.now(timezone.utc).isoformat()
+    prof["merged"] = True
+    prof["merged_at"] = now
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"genius_profile": prof}})
+
+    seeded_track = None
+    ep = prof.get("expected_path")
+    ep_label = EXPECTED_PATH_TO_LABEL.get(ep) if ep else None
+    if ep_label and not (doc or {}).get("current_track"):
+        seeded_track = ep_label
+        await db.users.update_one({"user_id": user.user_id}, {"$set": {"current_track": ep_label}})
+        td = WORKBOOK_TOOLS_BY_ID["track_declaration"]
+        await db.workbook_entries.update_one(
+            {"user_id": user.user_id, "tool_id": "track_declaration", "period_key": period_key_for(td)},
+            {"$set": {
+                "id": str(uuid.uuid4()), "user_id": user.user_id, "tool_id": "track_declaration",
+                "period_key": period_key_for(td),
+                "answers": {"road": ep_label, "road_id": LABEL_TO_ROAD[ep_label], "declared_at": now, "source": "genius_merge"},
+                "ai_reflection": "", "created_at": now, "updated_at": now,
+            }},
+            upsert=True,
+        )
+    return {"ok": True, "merged": True, "seeded_track": seeded_track, "genius_profile": prof}
+
+
+@api_router.post("/workbook/genius-profile/withdraw")
+async def withdraw_genius_profile(user: User = Depends(get_current_user)):
+    """Reversible: remove the imported profile from the MaxCoach account. If the road
+    was seeded by the merge (and not since re-declared by the student), clear it too."""
+    td = WORKBOOK_TOOLS_BY_ID["track_declaration"]
+    td_entry = await db.workbook_entries.find_one(
+        {"user_id": user.user_id, "tool_id": "track_declaration", "period_key": period_key_for(td)}, {"_id": 0, "answers": 1}
+    )
+    if td_entry and (td_entry.get("answers") or {}).get("source") == "genius_merge":
+        await db.users.update_one({"user_id": user.user_id}, {"$set": {"current_track": None}})
+        await db.workbook_entries.delete_many({"user_id": user.user_id, "tool_id": "track_declaration"})
+    await db.users.update_one({"user_id": user.user_id}, {"$unset": {"genius_profile": ""}})
+    await db.workbook_entries.delete_many({"user_id": user.user_id, "tool_id": "genius_mining"})
+    return {"ok": True, "withdrawn": True}
+
+
+@api_router.post("/integrations/campus-quest/genius-profile")
+async def import_genius_profile(body: GeniusProfileIn, request: Request):
+    """Server-to-server webhook: Campus Quest pushes a completed Genius Mining
+    profile, keyed by user_email. Requires the shared secret and the student's
+    consent. Stored as PENDING — the student still chooses to merge in-app."""
+    secret = request.headers.get("x-cq-secret")
+    if CAMPUS_QUEST_WEBHOOK_SECRET and secret != CAMPUS_QUEST_WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="Bad webhook secret")
+    if not body.user_email:
+        raise HTTPException(status_code=400, detail="user_email required")
+    user_doc = await db.users.find_one({"email": body.user_email}, {"_id": 0, "user_id": 1})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="No matching user for that email")
+    profile = body.model_dump(exclude_none=True)
+    stored = await _store_genius_profile(user_doc["user_id"], profile, require_consent=True)
+    return {"ok": True, "linked_user": user_doc["user_id"], "pending_merge": not stored.get("merged"), "section_f_withheld": stored.get("section_f_withheld", False)}
+
+
+@api_router.post("/workbook/cron/weekly-digest")
+async def workbook_weekly_digest(x_admin_token: Optional[str] = Header(None)):
+    """Sends the weekly 'your pages are ready' nudge to users who have declared a
+    road but haven't done this week's Weekly Architecture Review. Idempotent per
+    week (records a marker). Guarded by the admin token."""
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="admin only")
+    week = iso_week_key()
+    war = WORKBOOK_TOOLS_BY_ID["weekly_architecture_review"]
+    recipients, sent, skipped = [], 0, 0
+    users = await db.users.find(
+        {"current_track": {"$nin": [None, ""]}}, {"_id": 0, "user_id": 1, "email": 1, "name": 1, "current_track": 1}
+    ).to_list(5000)
+    for u in users:
+        done = await db.workbook_entries.find_one(
+            {"user_id": u["user_id"], "tool_id": "weekly_architecture_review", "period_key": week}
+        )
+        if done:
+            skipped += 1
+            continue
+        already = await db.workbook_digests.find_one(
+            {"user_id": u["user_id"], "week": week, "kind": "weekly_review"}
+        )
+        if already:
+            skipped += 1
+            continue
+        first = (u.get("name") or "there").split(" ")[0]
+        html = (
+            f"<p>Hey {first},</p>"
+            f"<p>Your <strong>Weekly Architecture Review</strong> is ready. Thirty minutes, all four burners — "
+            f"what performed, what drifted, and the one decision to make this week.</p>"
+            f"<p>You're on the <strong>{u['current_track']}</strong>. Open MaxCoach and fill this week's page.</p>"
+        )
+        res = await send_email_async(u["email"], "Your Weekly Architecture Review is ready", html)
+        await db.workbook_digests.insert_one({
+            "user_id": u["user_id"], "week": week, "kind": "weekly_review",
+            "email": u["email"], "result": res, "sent_at": datetime.now(timezone.utc).isoformat(),
+        })
+        recipients.append(u["email"])
+        sent += 1
+    return {"ok": True, "week": week, "sent": sent, "skipped": skipped, "recipients": recipients}
+
+
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
@@ -3323,6 +4050,18 @@ async def _ensure_indexes_background():
         await db.teacher_votes.create_index([("teacher_id", 1)], name="by_teacher")
     except Exception as e:
         logger.warning(f"teacher_votes index create failed: {e}")
+
+    # Digital Workbook — one entry per (user, tool, period); fast history reads.
+    try:
+        await db.workbook_entries.create_index(
+            [("user_id", 1), ("tool_id", 1), ("period_key", 1)],
+            unique=True, name="uniq_user_tool_period",
+        )
+        await db.workbook_entries.create_index(
+            [("user_id", 1), ("created_at", -1)], name="by_user_recent"
+        )
+    except Exception as e:
+        logger.warning(f"workbook_entries index create failed: {e}")
 
 
 async def _warm_mongo_connection():

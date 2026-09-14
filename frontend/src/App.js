@@ -8,6 +8,10 @@ import AuthCallback from "./pages/AuthCallback";
 import SignupGate from "./pages/SignupGate";
 import HomeScreen from "./pages/HomeScreen";
 import MemoryScreen from "./pages/MemoryScreen";
+import WorkbookHub from "./pages/WorkbookHub";
+import ToolPage from "./pages/ToolPage";
+import RoadFinder from "./pages/RoadFinder";
+import GeniusProfile from "./pages/GeniusProfile";
 import FoundingApply from "./pages/FoundingApply";
 import MaxPitchSubmit from "./pages/MaxPitchSubmit";
 import PitchPublicPage from "./pages/PitchPublicPage";
@@ -62,6 +66,7 @@ export default function App() {
   const [prevScreen, setPrevScreen] = useState("home");
   const [track, setTrack] = useState("");
   const [milesCfg, setMilesCfg] = useState(null);
+  const [workbookTool, setWorkbookTool] = useState(null);
 
   const hasSessionInUrl = typeof window !== "undefined" && window.location.hash?.includes("session_id=");
 
@@ -200,14 +205,18 @@ export default function App() {
     else if (screen === "miles_polls") body = <MilesPolls onBack={() => setScreen("miles_chat")} />;
     else if (screen === "miles_founding") body = <MilesFounding onBack={() => setScreen("miles_chat")} />;
     else if (screen === "genius_stack") body = <GeniusStackPage onBack={() => setScreen(user.miles_persona ? "miles_chat" : (user.role === "parent" ? "parent_home" : "home"))} />;
-    else if (screen === "home") body = <HomeScreen user={user} onContinueChat={() => setScreen(user.current_track ? "chat" : "track")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onOpenMiles={() => { setPrevScreen("home"); setScreen(user.miles_persona ? "miles_chat" : "miles_intro"); }} onOpenGeniusStack={() => { setPrevScreen("home"); setScreen("genius_stack"); }} onLogout={handleLogout} />;
+    else if (screen === "home") body = <HomeScreen user={user} onContinueChat={() => setScreen(user.current_track ? "chat" : "track")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onOpenMiles={() => { setPrevScreen("home"); setScreen(user.miles_persona ? "miles_chat" : "miles_intro"); }} onOpenGeniusStack={() => { setPrevScreen("home"); setScreen("genius_stack"); }} onOpenWorkbook={() => setScreen("workbook")} onLogout={handleLogout} />;
     else if (screen === "track") body = <TrackScreen onSelectTrack={(t) => { setTrack(t); setUser({ ...user, current_track: t }); setScreen("chat"); }} onBack={() => setScreen("home")} />;
     else if (screen === "chat") body = <ChatScreen track={track} onChangeTrack={() => setScreen("track")} onBack={() => setScreen("home")} onOpenBurners={() => openBurners("chat")} onUserUpdated={refreshUser} />;
     else if (screen === "memory") body = <MemoryScreen onBack={() => setScreen("home")} onSaved={(m) => setUser({ ...user, memory_card: m })} />;
+    else if (screen === "workbook") body = <WorkbookHub user={user} onBack={() => setScreen("home")} onOpenTool={(id) => { setWorkbookTool(id); setScreen("workbook_tool"); }} onOpenRoadFinder={() => setScreen("road_finder")} onOpenGenius={() => setScreen("genius_profile")} />;
+    else if (screen === "workbook_tool") body = <ToolPage toolId={workbookTool} onBack={() => setScreen("workbook")} onSaved={refreshUser} />;
+    else if (screen === "road_finder") body = <RoadFinder user={user} onBack={() => setScreen("workbook")} onCommitted={async (t) => { setTrack(t); setUser({ ...user, current_track: t }); await refreshUser(); setScreen("workbook"); }} />;
+    else if (screen === "genius_profile") body = <GeniusProfile onBack={() => setScreen("workbook")} onChanged={refreshUser} />;
     else if (screen === "founding") body = <FoundingApply onBack={() => setScreen("home")} onSubmitted={refreshUser} />;
     else if (screen === "pitch_submit") body = <MaxPitchSubmit onBack={() => setScreen("home")} />;
     else if (screen === "burners") body = <FourBurnersPage onBack={() => setScreen(prevScreen)} />;
-    else body = <HomeScreen user={user} onContinueChat={() => setScreen("chat")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onOpenMiles={() => { setPrevScreen("home"); setScreen(user.miles_persona ? "miles_chat" : "miles_intro"); }} onOpenGeniusStack={() => { setPrevScreen("home"); setScreen("genius_stack"); }} onLogout={handleLogout} />;
+    else body = <HomeScreen user={user} onContinueChat={() => setScreen("chat")} onOpenMemory={() => setScreen("memory")} onOpenBurners={() => openBurners("home")} onPickTrack={() => setScreen("track")} onApplyFounding={() => setScreen("founding")} onOpenMaxPitch={() => setScreen("pitch_submit")} onOpenKidAcceptInvite={() => setScreen("kid_accept_invite")} onOpenMiles={() => { setPrevScreen("home"); setScreen(user.miles_persona ? "miles_chat" : "miles_intro"); }} onOpenGeniusStack={() => { setPrevScreen("home"); setScreen("genius_stack"); }} onOpenWorkbook={() => setScreen("workbook")} onLogout={handleLogout} />;
   }
 
   return (
