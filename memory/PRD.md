@@ -350,3 +350,12 @@ The Founding 20 application funnel is the product's revenue wedge — you can ch
 - `/app/frontend/src/pages/WelcomeScreen.js` — beta acknowledgment checkbox gate
 - `/app/frontend/src/components/PayPalCheckoutButton.js` — NEW (reusable Smart Button component)
 
+
+## November 2 — Navigation & user-flow refactor (frontend only)
+
+- `App.js` refactored for developer handoff; see `memory/NAVIGATION_REFACTOR_HANDOFF.md` for full details.
+- Browser Back/Forward + refresh-restore now work inside the authed app via `#/screen/<name>` hash history (allow-listed in `AUTHED_SCREENS`).
+- Public routes made declarative (`PUBLIC_PATH_ROUTES` + `PUBLIC_SCREENS` tables + shared `AppShell`).
+- Fixed stale-closure routing in SignupGate completion, JudgeView fetch race, and two CI-blocking lint errors.
+- Removed dead code (unreachable session branch, never-set `onboarding`/`auth_callback` screens); deduped HomeScreen/Miles navigation wiring.
+- Verified: production build green, static serve OK. No visual/testid/API changes.

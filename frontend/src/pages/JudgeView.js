@@ -9,16 +9,20 @@ export default function JudgeView({ token }) {
   const [savingSlug, setSavingSlug] = useState(null);
   const [err, setErr] = useState(null);
 
-  const load = async () => {
-    try {
-      const data = await apiJSON(`/pitch/judge/pitches?token=${encodeURIComponent(token)}`);
-      setJudge({ name: data.judge_name });
-      setPitches(data.pitches);
-      setLoading(false);
-    } catch (e) { setErr(e.message); setLoading(false); }
-  };
-
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [token]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await apiJSON(`/pitch/judge/pitches?token=${encodeURIComponent(token)}`);
+        if (cancelled) return;
+        setJudge({ name: data.judge_name });
+        setPitches(data.pitches);
+        setLoading(false);
+      } catch (e) { if (!cancelled) { setErr(e.message); setLoading(false); } }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [token]);
 
   const flag = async (slug, interested, note = "") => {
     setSavingSlug(slug);
