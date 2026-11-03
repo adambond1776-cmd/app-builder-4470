@@ -6,10 +6,11 @@ export default function WelcomeScreen({ onStart, onBack, onOpenBurners }) {
   const [qIdx, setQIdx] = useState(0);
   const [betaAck, setBetaAck] = useState(false);
   const teaserQuotes = [QUOTES[0], QUOTES[2], QUOTES[4], QUOTES[6]]; // Elon, Bezos, Huberman, Naval
+  const teaserCount = teaserQuotes.length;
   useEffect(() => {
-    const t = setInterval(() => setQIdx((i) => (i + 1) % teaserQuotes.length), 6000);
+    const t = setInterval(() => setQIdx((i) => (i + 1) % teaserCount), 6000);
     return () => clearInterval(t);
-  }, []);
+  }, [teaserCount]);
   const tq = teaserQuotes[qIdx];
 
   const handleStart = () => {
